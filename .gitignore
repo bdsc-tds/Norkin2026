@@ -6,14 +6,6 @@ figures/*
 !results/.gitkeep
 !figures/.gitkeep
 
-!data/scRNAseq/.gitkeep
-!results/scRNAseq/.gitkeep
-!figures/scRNAseq/.gitkeep
-
-!data/xenium/.gitkeep
-!results/xenium/.gitkeep
-!figures/xenium/.gitkeep
-
 #Ignore xenium_analysis_pipeline
 xenium_analysis_pipeline/
 

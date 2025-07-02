@@ -1,0 +1,25 @@
+[workspace]
+authors = ["j-bac <jo.bac@live.fr>"]
+channels = ["conda-forge"]
+name = "norkin_organoid"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "<=3.11"
+
+[environments]
+norkin-organoid = ["norkin-organoid"]
+
+[feature.norkin-organoid.tasks]
+add-kernel = "python -m ipykernel install --user --name norkin_organoid --display-name 'Python (norkin_organoid)'"
+
+[feature.norkin-organoid.dependencies]
+spatialdata = ">=0.4.0,<0.5"
+spatialdata-io = ">=0.2.0,<0.3"
+spatialdata-plot = ">=0.2.10,<0.3"
+ipykernel = ">=6.29.5,<7"
+scanpy = ">=1.11.2,<2"
+r-seurat = { version = ">=5.3.0,<6", channel = "conda-forge" }
