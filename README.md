@@ -19,6 +19,7 @@ source ~/.bashrc
 ### 2. Install environments
 ```bash
 cd norkin_organoid
+pixi config set --local run-post-link-scripts insecure
 pixi install
 ```
 
@@ -30,5 +31,5 @@ pixi run add-kernel
 
 You can also activate the environment from a terminal:
 ```bash
-pixi shell
+pixi shell -e norkin-organoid
 ```
