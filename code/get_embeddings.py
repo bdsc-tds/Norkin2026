@@ -276,8 +276,11 @@ def polygon_to_mask(polygons, output_size=(224, 224), padding_ratio=0.1):
     return mask
 
 class NorkinOrganoidDataset(torch.utils.data.Dataset):
-    def __init__(self, raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
-                 save_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/code/organoid_masks.pkl'):
+    def __init__(
+        self, 
+        raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
+        save_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks.pkl'
+    ):
         """
         Args:
             raw_data_path: Path to directory containing cell_boundaries.parquet files
@@ -287,12 +290,16 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         self.raw_data_path = raw_data_path
         self.save_path = save_path
         self.organoid_masks = []
-        
+        self.organoid_patient_ids = []
+
         # Try to load preprocessed masks if they exist
-        if os.path.exists(self.save_path):
+        if os.path.exists(self.save_path) and isinstance(pickle.load(open(self.save_path, 'rb')), dict):
             print(f"Loading preprocessed masks from {self.save_path}")
             with open(self.save_path, 'rb') as f:
-                self.organoid_masks = pickle.load(f)
+                data_obj = pickle.load(f)
+                self.organoid_masks = data_obj['organoid_masks']
+                self.organoid_patient_ids = data_obj['organoid_patient_ids']
+                self.organoid_patient_ids_encoded = data_obj['organoid_patient_ids_encoded']
         else:
             # Process parquet files if no saved masks exist
             self._process_raw_data()
@@ -319,15 +326,32 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                     padding_ratio=0.1
                 )
                 self.organoid_masks.append(organoid_mask)
+
+            # path example: /work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/data/xenium/raw/CRC_PDO/hImmune_v1_mm/1DCI/output-XETG00059__0021741__1DCL__20250319__172035/cell_boundaries.parquet
+            patient_id = cell_boundary_pth.split('/')[-3]
+            self.organoid_patient_ids += [patient_id] * len(organoids)
         
         self.organoid_masks = np.array(self.organoid_masks)
+        # Create and fit the encoder
+        encoded_labels = LabelEncoder().fit_transform(self.organoid_patient_ids)
+        self.organoid_patient_ids_encoded = encoded_labels
     
     def _save_masks(self):
         """Save processed masks to disk"""
         os.makedirs(os.path.dirname(self.save_path), exist_ok=True)
         with open(self.save_path, 'wb') as f:
-            pickle.dump(self.organoid_masks, f)
+            pickle.dump({
+                "organoid_masks": self.organoid_masks, 
+                "organoid_patient_ids": self.organoid_patient_ids,
+                "organoid_patient_ids_encoded": self.organoid_patient_ids_encoded,
+            }, f)
         print(f"Saved {len(self.organoid_masks)} organoid masks to {self.save_path}")
+
+    def get_patient_id(self, idx, encoded=False):
+        if encoded:
+            return self.organoid_patient_ids_encoded[idx]
+
+        return self.organoid_patient_ids[idx]
     
     def __len__(self):
         return len(self.organoid_masks)
@@ -335,70 +359,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # Convert numpy array to torch tensor and add channel dimension
         return torch.from_numpy(self.organoid_masks[idx]).float().unsqueeze(0)
-
-
-def get_morphological_features(masks):
-    """
-    Compute morphological features for each binary mask, measuring properties of all regions collectively.
-    
-    Args:
-        masks: List of binary masks (2D numpy arrays)
-        
-    Returns:
-        List of dictionaries containing morphological features for each mask
-    """
-    from skimage.measure import label, regionprops
-    from skimage.morphology import convex_hull_image
-    from tqdm import tqdm
-    import numpy as np
-
-    features = []
-    for mask in tqdm(masks, desc="Calculating morphological features"):
-        # Label connected components
-        labeled = label(mask)
-        regions = regionprops(labeled)
-        
-        # Initialize aggregated features
-        mask_features = {
-            'area': 0,
-            'perimeter': 0,
-            'eccentricity': 0,
-            'solidity': 0,
-            'extent': 0,
-            'major_axis_length': 0,
-            'minor_axis_length': 0,
-            'convex_hull_blank_percentage': 0
-        }
-        
-        if len(regions) > 0:
-            # Calculate convex hull for all regions together
-            combined_mask = labeled > 0
-            convex_hull = convex_hull_image(combined_mask)
-            
-            # Calculate blank pixels in convex hull
-            blank_pixels = np.sum(convex_hull & ~combined_mask)
-            hull_pixels = np.sum(convex_hull)
-            blank_percentage = (blank_pixels / hull_pixels) * 100 if hull_pixels > 0 else 0
-            
-            # Aggregate properties across all regions
-            mask_features = {
-                'area': sum(r.area for r in regions),
-                'perimeter': sum(r.perimeter for r in regions),
-                'eccentricity': np.mean([r.eccentricity for r in regions]),
-                'solidity': np.mean([r.solidity for r in regions]),
-                'extent': np.mean([r.extent for r in regions]),
-                'major_axis_length': np.mean([r.major_axis_length for r in regions]),
-                'minor_axis_length': np.mean([r.minor_axis_length for r in regions]),
-                'convex_hull_blank_percentage': blank_percentage
-            }
-        
-        features.append(mask_features)
-    
-    # Verify output length matches input length
-    assert len(features) == len(masks), \
-        f"Output length {len(features)} doesn't match input length {len(masks)}"
-    
-    return features
 
 def get_resnet152_embeddings(X, morphological_features=None, fine_tune=False, 
                            num_epochs=5, learning_rate=1e-4, batch_size=32,
