@@ -16,7 +16,7 @@ norkin-organoid = ["norkin-organoid"]
 
 [feature.norkin-organoid.tasks]
 add-kernel = "python -m ipykernel install --user --name norkin_organoid --display-name 'Python (norkin_organoid)'"
-fix-genomeinfodb = "R -e 'BiocManager::install('GenomeInfoDbData')'"
+fix-genomeinfodb = 'R --vanilla -e "BiocManager::install(\"GenomeInfoDbData\")"'
 
 [feature.norkin-organoid.dependencies]
 spatialdata = ">=0.4.0,<0.5"
@@ -34,3 +34,5 @@ bioconductor-genomeinfodb = { version = ">=1.38.1,<2", channel = "bioconda" }
 r-biocmanager = { version = ">=1.30.26,<2", channel = "conda-forge" }
 r-readr = ">=2.1.5,<3"
 r-hdf5r = ">=1.3.12,<2"
+scvi-tools = ">=1.3.2,<2"
+snakemake = ">=9.8.0,<10"

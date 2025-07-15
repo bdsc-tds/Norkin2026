@@ -1,20 +1,3 @@
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# SCRIPT: Generate a Cell Type Dictionary from Multiple Seurat References
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
-# This script performs the following steps:
-# 1. Uses a detailed configuration list to define Seurat object paths and
-#    the mapping of specific metadata columns to conceptual levels (Level1-4).
-# 2. Loads all specified Seurat objects.
-# 3. Generates a comprehensive dictionary file ('cell_type_dictionary.csv').
-#    This file lists every unique cell type label from the specified columns,
-#    organized by Level and including the source study name.
-#
-# This dictionary serves as the starting point for creating a final,
-# harmonized mapping file.
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-# --- SETUP: Load libraries ---
 library(Seurat)
 library(dplyr)
 library(readr)
@@ -24,7 +7,7 @@ library(readr)
 source('../../scripts/readwrite.R') # Uncomment if you use these helper functions
 cfg <- config() # Uncomment if you use a config file
 
-# --- ACTION REQUIRED: CONFIGURE YOUR DATASETS HERE ---
+# --- CONFIGURE DATASETS  ---
 # This list is the main control panel for the script.
 # For each dataset, define:
 #   - path: Path to the input Seurat .rds file.
@@ -83,6 +66,11 @@ for (dataset_name in names(datasets_config)) {
     config <- datasets_config[[dataset_name]]
     seurat_obj <- seurat_objects[[dataset_name]]
 
+    if (dataset_name == "marteau") {
+        # The Marteau dataset has an 'originalexp' assay that we need to rename
+        seurat_obj <- RenameAssays(seurat_obj, 'originalexp', 'RNA')
+    }
+
     # Loop through our target level names (Level1, Level2, etc.)
     for (level_name in target_levels) {
         # Check if a mapping for this level exists in the config for this dataset
@@ -98,7 +86,11 @@ for (dataset_name in names(datasets_config)) {
                     level_name,
                     source_col
                 ))
-                seurat_obj[[level_name]] <- seurat_obj@meta.data[[source_col]]
+                seurat_obj[[level_name]] <- gsub(
+                    "/",
+                    "_",
+                    as.character(seurat_obj@meta.data[[source_col]])
+                )
             } else {
                 # The column specified in the config was not found in the object.
                 cat(sprintf(
