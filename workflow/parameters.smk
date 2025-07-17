@@ -103,9 +103,9 @@ UMAP_PARAMS = pd.DataFrame(
 
 # --- Plotting Style Parameters ---
 PLOT_PARAMS = {
-    's': 0.5,
+    's': 1,
     'alpha': 0.5,
-    'dpi': 300,
+    'dpi': 100,
     'points_only': False,
     'extension': 'png',
     'cell_type_palette': PALETTE_DIR / 'col_palette_cell_types.csv',

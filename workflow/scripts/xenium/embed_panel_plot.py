@@ -188,6 +188,8 @@ if facet:
         for handle in handles:
             if hasattr(handle, "set_sizes"):
                 handle.set_sizes([20])
+            elif hasattr(handle, "set_linewidth"):
+                handle.set_linewidth(4)
         g.tight_layout(rect=[0, 0, 0.9, 0.96])
 
 else:
@@ -213,6 +215,24 @@ else:
         sns.despine()
 
         plt.title(title)
+
+        handles, labels = ax.get_legend_handles_labels()
+        for handle in handles:
+            if hasattr(handle, "set_sizes"):
+                handle.set_sizes([20])
+            elif hasattr(handle, "set_linewidth"):
+                handle.set_linewidth(4)
+
+        ax.legend(
+            handles=handles,
+            labels=labels,
+            loc="center left",
+            bbox_to_anchor=(1, 0.5),
+            title=params,  # Use the column name as the legend title
+            frameon=False,
+            fontsize="medium",  # Optional: adjust font size
+        )
+
         # f.legend(
         #     handles=legend_handles,
         #     loc="center left",

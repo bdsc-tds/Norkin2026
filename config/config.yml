@@ -19,7 +19,11 @@ scrnaseq_references_dir: "data/scRNAseq/processed/references/"
 
 scrnaseq_reference_GSE178341_seurat: "data/scRNAseq/processed/references/GEO_GSE178341/GSE178341_seurat.rds"
 scrnaseq_reference_GSE236581_seurat: "data/scRNAseq/processed/references/GEO_GSE236581/GSE236581_seurat.rds"
-scrnaseq_reference_marteau_seurat: "data/scRNAseq/processed/references/Marteau2024/core_atlas-adata_subsampled.rds"
+scrnaseq_reference_marteau_seurat: "data/scRNAseq/processed/references/Marteau2024/core_atlas-adata_subsampled_seurat.rds"
+
+scrnaseq_reference_GSE178341_malignant_seurat: "data/scRNAseq/processed/references/GEO_GSE178341/GSE178341_malignant_seurat.rds"
+# scrnaseq_reference_GSE236581_malignant_seurat: "data/scRNAseq/processed/references/GEO_GSE236581/GSE236581_malignant_seurat.rds"
+scrnaseq_reference_marteau_malignant_seurat: "data/scRNAseq/processed/references/Marteau2024/core_atlas-adata_subsampled_malignant_seurat.rds"
 
 cell_type_palette: "data/metadata/col_palette_cell_types.csv"
 panel_palette: "data/metadata/col_palette_panels.csv"

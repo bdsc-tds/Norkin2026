@@ -4,12 +4,12 @@ include: "parameters.smk"
 wildcard_constraints:
     **WILDCARD_CONSTRAINTS #from parameters.smk
 
-# include: "rules/0-embedding.smk"
+include: "rules/0-embedding.smk"
 include: "rules/1-embedding_plot.smk"
 
 rule all:
     input:
-        # rules.embed_panel_all.input,
+        rules.embed_panel_all.input,
         rules.embed_panel_plot_all.input,
         # rules.embed_condition_all.input,
         # rules.embed_condition_plot_all.input,
