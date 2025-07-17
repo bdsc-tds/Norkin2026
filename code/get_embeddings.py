@@ -7,16 +7,17 @@ import pickle
 import tifffile
 import torch
 
-from matplotlib.collections import PolyCollection
+from matplotlib.collections import PatchCollection, PolyCollection
 from skimage.draw import polygon
 from skimage.measure import label, regionprops_table
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, LabelEncoder
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 from tqdm import tqdm
 from torchvision.models import resnet152
 from torchvision.transforms import functional as TF
+
 
 
 def visualize_cell_segmentation(parquet_path, limit=None):
@@ -359,6 +360,53 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # Convert numpy array to torch tensor and add channel dimension
         return torch.from_numpy(self.organoid_masks[idx]).float().unsqueeze(0)
+
+def get_morphological_features(masks):
+    """
+    Compute morphological features for each object in binary masks, including convex hull blank percentage.
+    
+    Args:
+        masks: List of binary masks (2D numpy arrays) where each mask contains one or more objects
+        
+    Returns:
+        List of dictionaries containing morphological features for each object in each mask
+    """
+    from skimage.measure import label, regionprops_table, regionprops
+    from skimage.morphology import convex_hull_image
+    from tqdm import tqdm
+    import numpy as np
+
+    features = []
+    for mask in tqdm(masks, desc="Calculating morphological features"):
+        # Label connected components (each organoid should already be separate)
+        labeled = label(mask)
+        
+        # Get region properties including convex hull calculations
+        regions = regionprops(labeled)
+        
+        for region in regions:
+            # Calculate convex hull
+            convex_hull = convex_hull_image(region.image)
+            
+            # Calculate blank pixels in convex hull (pixels in hull but not in object)
+            blank_pixels = np.sum(convex_hull & ~region.image)
+            hull_pixels = np.sum(convex_hull)
+            blank_percentage = (blank_pixels / hull_pixels) * 100 if hull_pixels > 0 else 0
+            
+            # Get standard properties
+            props = {
+                'area': region.area,
+                'perimeter': region.perimeter,
+                'eccentricity': region.eccentricity,
+                'solidity': region.solidity,
+                'extent': region.extent,
+                'major_axis_length': region.major_axis_length,
+                'minor_axis_length': region.minor_axis_length,
+                'convex_hull_blank_percentage': blank_percentage
+            }
+            features.append(props)
+    
+    return features
 
 def get_resnet152_embeddings(X, morphological_features=None, fine_tune=False, 
                            num_epochs=5, learning_rate=1e-4, batch_size=32,
