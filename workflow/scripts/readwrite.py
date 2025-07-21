@@ -661,3 +661,85 @@ def read_count_correction_samples(xenium_paths, correction_methods):
                     xenium_corrected_counts[correction_method][sample_name] = None  # Store None in case of error
 
     return xenium_corrected_counts
+
+
+###### Xenium cell type annotation reader
+def get_anndata_from_object(data_object):
+    """
+    Checks if the input is a SpatialData object and returns its AnnData table.
+    If the input is already an AnnData object, it returns it directly.
+    """
+    if isinstance(data_object, spatialdata.SpatialData):
+        # It's a SpatialData object, return its table
+        return data_object["table"]
+    elif isinstance(data_object, ad.AnnData):
+        # It's already an AnnData object, return as is
+        return data_object
+
+
+def read_annotations(data_dict, correction_methods, xenium_annot_paths, level, max_workers=8):
+    """
+    Assigns cell type annotation (and filters NaN cells) for a dictionary of AnnData objects using parallel threads.
+
+    Parameters:
+    - data_dict: dict of dicts containing AnnData or SpatialData objects per correction method.
+    - correction_methods: list of strings indicating the correction methods.
+    - xenium_annot_paths: dict of file paths to annotation parquet files.
+    - level: string, the name of the column in annotations to assign to AnnData.obs.
+    - max_workers: number of threads to use.
+    """
+
+    def process_raw(k, ad):
+        if ad is None:
+            return (k, None)
+
+        if k[0] == "proseg_expected":
+            ad.obs_names = ad.obs_names.astype(str)
+            if not ad.obs_names[0].startswith("proseg-"):
+                ad.obs_names = "proseg-" + ad.obs_names
+
+        annot_path = xenium_annot_paths["raw"].get(k)
+        if annot_path and Path(annot_path).exists():
+            labels = pd.read_parquet(annot_path).set_index("cell_id").iloc[:, 0]
+            ad.obs[level] = labels
+            ad = ad[ad.obs[level].notna()].copy()
+        else:
+            print(f"Could not find annotation file for {k}")
+
+        return (k, ad)
+
+    # Check if dict contains spatialdata or anndata
+    data_object = data_dict["raw"][list(data_dict["raw"])[0]]
+    if isinstance(data_object, spatialdata.SpatialData):
+        is_sdata = True
+
+    # --- Process 'raw' in parallel ---
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        if is_sdata:
+            futures = [executor.submit(process_raw, k, sd["table"]) for k, sd in data_dict["raw"].items()]
+        else:
+            futures = [executor.submit(process_raw, k, ad) for k, ad in data_dict["raw"].items()]
+
+        for future in as_completed(futures):
+            k, processed_ad = future.result()
+            if processed_ad is not None:
+                if is_sdata:
+                    data_dict["raw"][k]["table"] = processed_ad
+                else:
+                    data_dict["raw"][k] = processed_ad
+
+    # --- Add raw annotation to corrected counts  ---
+    for correction_method in correction_methods:
+        if correction_method == "raw":
+            continue
+        for k, ad_ in data_dict[correction_method].items():
+            if ad_ is None:
+                continue
+
+            raw_ad = data_dict["raw"][k]
+            if level in raw_ad.obs:
+                ad_.obs[level] = raw_ad.obs[level]
+                ad_ = ad_[ad_.obs[level].notna()].copy()
+                data_dict[correction_method][k] = ad_
+            else:
+                print(f"Raw annotations missing for {k} when processing {correction_method}")
