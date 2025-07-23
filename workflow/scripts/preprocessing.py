@@ -141,6 +141,8 @@ def preprocess(
     log1p=False,  # Log1p transform
     pca=False,  # Perform PCA
     scale="none",  # Scale data
+    neighbors=False,
+    leiden=False,
     umap=False,  # Perform UMAP
     n_comps=30,  # Number of PCA components
     n_neighbors=15,  # Number of neighbors for kNN
@@ -156,6 +158,7 @@ def preprocess(
     max_counts=None,
     max_genes=None,
     min_cells=None,
+    resolutions=[1.0],
 ):
     """
     Preprocesses an AnnData object.
@@ -166,6 +169,8 @@ def preprocess(
         log1p (bool): Whether to log1p transform.
         pca (bool): Whether to perform PCA.
         scale (str): Whether to scale data or not. Can be "none", "batch" or "all".
+        neighbors (bool): Whether to perform kNN search.
+        leiden (bool): Whether to perform Leiden clustering.
         umap (bool): Whether to perform UMAP.
         n_comps (int): Number of PCA components.
         n_neighbors (int): Number of neighbors for kNN.
@@ -174,12 +179,24 @@ def preprocess(
         device (int): Device ID for GPU backend.
         save_raw (bool): Whether to save raw data in layers['counts']
         verbose (bool): Whether to print verbose output.
+        filter_empty (bool): Whether to filter empty batches.
+        min_counts (int): Minimum number of counts per cell.
+        min_genes (int): Minimum number of genes per cell.
+        max_counts (int): Maximum number of counts per cell.
+        max_genes (int): Maximum number of genes per cell.
+        min_cells (int): Minimum number of cells per gene.
+        resolutions (list): List of resolutions for Leiden clustering.
 
     Returns:
         None
     """
     if "preprocess" in adata.uns:
         print("Warning: preprocess key already found in adata.uns")
+
+    if umap or leiden:
+        if not neighbors:
+            print("Setting neighbors to True for UMAP or Leiden clustering")
+            neighbors = True
 
     if save_raw:
         if verbose:
@@ -242,6 +259,19 @@ def preprocess(
         if verbose:
             print("Performing PCA...")
         xsc.tl.pca(adata, n_comps=n_comps)
+    if neighbors:
+        if verbose:
+            print("\tkNN search...")
+        xsc.pp.neighbors(adata, n_pcs=n_comps, n_neighbors=n_neighbors, metric=metric)
+    if leiden:
+        if backend == "cpu":
+            leiden_extra_kwargs = {"flavor": "igraph", "n_iterations": 2}
+        else:
+            leiden_extra_kwargs = {}
+        for r in resolutions:
+            if verbose:
+                print("\tleiden clustering with resolution", r)
+            xsc.tl.leiden(adata, resolution=r, key_added=f"leiden_{r}", **leiden_extra_kwargs)
     if umap:
         if verbose:
             print("Performing UMAP...")

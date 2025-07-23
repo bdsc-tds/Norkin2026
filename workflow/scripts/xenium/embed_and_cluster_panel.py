@@ -31,6 +31,7 @@ parser.add_argument("--max_features", type=float, help="QC parameter from pipeli
 parser.add_argument("--min_cells", type=int, help="QC parameter from pipeline config")
 parser.add_argument("--genes", type=str, nargs="*", default=[], help="Restrict data to these genes for the UMAP.")
 parser.add_argument("--samples", type=str, nargs="*", default=[], help="Restrict data to these samples for the UMAP.")
+parser.add_argument("--resolutions", type=float, nargs="*", default=[1.0], help="Leiden resolutions")
 
 args = parser.parse_args()
 
@@ -51,6 +52,7 @@ max_features = args.max_features
 min_cells = args.min_cells
 genes = args.genes
 samples = args.samples
+resolutions = args.resolutions
 
 segmentation = panel.parents[1].stem
 condition = panel.parents[0].stem
@@ -157,6 +159,8 @@ preprocessing.preprocess(
     metric=metric,
     min_dist=min_dist,
     n_neighbors=n_neighbors,
+    neighbors=True,
+    leiden=True,
     pca=True,
     umap=True,
     save_raw=False,
@@ -165,10 +169,12 @@ preprocessing.preprocess(
     max_counts=None,
     max_genes=None,
     min_cells=None,
+    resolutions=resolutions,
 )
 
 # save
 df_umap = pd.DataFrame(ad_merge.obsm["X_umap"], index=ad_merge.obs_names, columns=["UMAP1", "UMAP2"])
 df_umap[xenium_levels] = ad_merge.obs[xenium_levels]
+df_umap[[f"leiden_{r}" for r in resolutions]] = ad_merge.obs[[f"leiden_{r}" for r in resolutions]]
 
 df_umap.to_parquet(out_file)

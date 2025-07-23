@@ -68,13 +68,13 @@ def xenium_specs(path):
 def discover_xenium_paths(
     analysis_dir: Path,
     data_dir: Path,
-    annotation_dir: Path,
-    correction_dir: Path,
-    normalisation: str,
-    reference: str,
-    method: str,
-    level: str,
-    correction_methods_filter: List[str],
+    annotation_dir: Optional[Path] = None,
+    correction_dir: Optional[Path] = None,
+    normalisation: Optional[str] = None,
+    reference: Optional[str] = None,
+    method: Optional[str] = None,
+    level: Optional[str] = None,
+    correction_methods_filter: List[str] = ["raw", "split_fully_purified"],
     segmentations_filter: Optional[List[str]] = None,
     conditions_filter: Optional[List[str]] = None,
     panels_filter: Optional[List[str]] = None,
@@ -85,7 +85,6 @@ def discover_xenium_paths(
     Args:
         analysis_dir: Path to the base directory for Seurat analysis.
         data_dir: Path to the base directory containing the raw Xenium data.
-        ... (other args are the same) ...
         segmentations_filter: Optional list of segmentation names to include.
         conditions_filter: Optional list of condition names to include.
         panels_filter: Optional list of panel names to include.
@@ -109,7 +108,6 @@ def discover_xenium_paths(
         k = sample_path.relative_to(analysis_dir).parts
 
         # --- High-performance filtering logic ---
-        # The `and ... not in ...` pattern elegantly handles the case where a filter is None.
         if (
             (seg_set and k[0] not in seg_set)
             or (cond_set and k[1] not in cond_set)
@@ -127,10 +125,11 @@ def discover_xenium_paths(
                 raw_path = data_dir / f"{name}/normalised_results/outs"
             xenium_paths["raw"][k] = raw_path
 
-            annot_path = annotation_dir / (
-                f"{name}/{normalisation}/reference_based/{reference}/{method}/{level}/single_cell/labels.parquet"
-            )
-            xenium_annot_paths["raw"][k] = annot_path
+            if annotation_dir is not None:
+                annot_path = annotation_dir / (
+                    f"{name}/{normalisation}/reference_based/{reference}/{method}/{level}/single_cell/labels.parquet"
+                )
+                xenium_annot_paths["raw"][k] = annot_path
 
         if "split_fully_purified" in correction_methods_filter:
             corrected_base = (

@@ -39,7 +39,7 @@ cat("All objects loaded.\n\n")
 cat("========================================================\n")
 cat("Subsetting Malignant Cells From All Datasets\n")
 cat("========================================================\n")
-level_name = 'Level1'
+level_name = 'Level3'
 
 for (dataset_name in names(datasets_config)) {
     cat("\n--------------------------------------------------------\n")

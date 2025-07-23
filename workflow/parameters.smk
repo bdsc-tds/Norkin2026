@@ -1,11 +1,8 @@
-# config/parameters.smk
-
-from pathlib import Path
 import pandas as pd
-from itertools import product
-
 import re
 import pandas as pd
+from itertools import product
+from pathlib import Path
 
 def _generate_from_dict(params_dict):
     """Creates regex constraints from a dictionary of lists."""
@@ -61,11 +58,13 @@ def generate_wildcard_constraints(*param_objects):
 
 # --- Paths from main config ---
 PIXI_ENV = 'norkin-organoid'
+PIXI_ENV_CELLCHARTER = 'cellcharter'
 RESULTS_DIR = Path(config['results_dir'])
 FIGURES_DIR = Path(config['figures_dir'])
 PALETTE_DIR = Path(config['xenium_metadata_dir'])
-STD_SEURAT_ANALYSIS_DIR = Path(config['xenium_std_seurat_analysis_dir'])
 XENIUM_PROCESSED_DIR = Path(config['xenium_processed_dir'])
+STD_SEURAT_ANALYSIS_DIR = Path(config['xenium_std_seurat_analysis_dir'])
+COUNT_CORRECTION_DIR = Path(config['xenium_count_correction_dir'])
 CELL_TYPE_ANNOTATION_DIR = Path(config['xenium_cell_type_annotation_dir'])
 CELL_TYPE_PALETTE = Path(config['cell_type_palette'])
 PANEL_PALETTE = Path(config['panel_palette'])
@@ -95,7 +94,6 @@ QC_PARAMS = {
 }
 
 # --- UMAP Parameters ---
-# Storing as a DataFrame is good practice for sets of parameters
 UMAP_PARAMS = pd.DataFrame(
     product([50], [50], [0.5], ['euclidean']),
     columns=['n_comps', 'n_neighbors', 'min_dist', 'metric']
@@ -115,20 +113,18 @@ PLOT_PARAMS = {
 }
 
 # --- Plotting Logic Parameters ---
-# These control *what* gets plotted
 LIST_PARAMS = {
     'normalisation': ['lognorm'],
     'layer': ['data', 'scale_data'],
-    # 'reference': ['GEO_GSE178341', 'GEO_GSE236581', 'Marteau2024'],
     'method': ['rctd_class_aware'],
-    # 'level': ['sample', 'Level1', 'Level2', 'Level3', 'Level4'],
-    'plot_type': ['umap', 'facet_umap']
+    'plot_type': ['umap', 'facet_umap'],
+    'correction_method':['raw','split_fully_purified']
 }
 
 REF_LEVELS = {
-    'GEO_GSE178341': ['Level1', 'Level2', 'sample'],
-    'GEO_GSE236581': ['Level1', 'Level2', 'Level3', 'sample'],
-    'Marteau2024':   ['Level1', 'Level2', 'Level3', 'Level4', 'sample']
+    'GEO_GSE178341': ['Level1', 'Level2', 'Level3', 'sample'],
+    'GEO_GSE236581': ['Level1', 'Level2', 'sample'],
+    # 'Marteau2024':   ['Level1', 'Level2', 'Level3', 'Level4', 'sample']
 }
 LIST_PARAMS['reference'] = list(REF_LEVELS.keys())
 LIST_PARAMS['level'] = list(set().union(*REF_LEVELS.values()))
@@ -147,85 +143,6 @@ WILDCARD_CONSTRAINTS = generate_wildcard_constraints(
 
     # Add any other future param objects here
 )
-
-
-# =================================================================================
-# IV. RULE-SPECIFIC TARGET GENERATION
-# Encapsulated logic to generate file lists for 'all' rules.
-# =================================================================================
-
-def get_outputs_embed_panel():
-    """Builds the full list of output files by expanding params for each valid path."""
-    
-    # The full parameter space to expand for each panel
-    param_combinations = expand(
-        "/{normalisation}/umap_{layer}_n_comps={n_comps}_n_neighbors={n_neighbors}_min_dist={min_dist}_metric={metric}.parquet",
-        normalisation=LIST_PARAMS['normalisation'],
-        layer=LIST_PARAMS['layer'],
-        n_comps=UMAP_PARAMS['n_comps'],
-        n_neighbors=UMAP_PARAMS['n_neighbors'],
-        min_dist=UMAP_PARAMS['min_dist'],
-        metric=UMAP_PARAMS['metric']
-    )
-    
-    # The valid base directories for each panel
-    base_dirs = expand(
-        str(RESULTS_DIR / "xenium/embed_panel/{segmentation}/{condition}/{panel}"),
-        zip,
-        segmentation=PATHS_PARAMS['segmentation'],
-        condition=PATHS_PARAMS['condition'],
-        panel=PATHS_PARAMS['panel']
-    )
-    
-    # Create the final list using a list comprehension
-    # For each base directory, append each parameter combination.
-    target_files = [
-        f"{base_dir}{param_combo}"
-        for base_dir in base_dirs
-        for param_combo in param_combinations
-    ]
-    return target_files
-
-
-def get_outputs_embed_panel_plot():
-    """Generates the list of output files for the embed_panel_plot rule."""
-
-    # ref levels to df
-    ref_level_pairs = [
-        {'reference': ref, 'level': lvl}
-        for ref, levels in REF_LEVELS.items()
-        for lvl in levels
-    ]
-    ref_level_df = pd.DataFrame(ref_level_pairs)
-
-    # list params to df
-    list_params_df = pd.DataFrame(
-        product(*LIST_PARAMS.values()), columns=LIST_PARAMS.keys()
-    ).drop(columns=['reference', 'level'])
-
-    # combine all params
-    base_df = PATHS_PARAMS[['segmentation',	'condition','panel']].drop_duplicates().merge(list_params_df, how='cross')
-    combined_df = base_df.merge(ref_level_df, how='cross')
-    final_df_with_umap = combined_df.merge(UMAP_PARAMS, how='cross')
-
-    query_filters = ["not (plot_type == 'facet_umap' and level == 'sample')"]
-    final_df_filtered = final_df_with_umap.query(" and ".join(query_filters))
-
-    # Path building logic 
-    def build_path(row):
-        dir_path = FIGURES_DIR / "xenium/embed_panel" / row['segmentation'] / row['condition'] / row['panel'] / row['normalisation']
-        filename = (
-            f"{row['plot_type']}_{row['layer']}_"
-            f"n_comps={row['n_comps']}_n_neighbors={row['n_neighbors']}_min_dist={row['min_dist']}_metric={row['metric']}_"
-            f"{row['reference']}_{row['method']}_{row['level']}.{PLOT_PARAMS['extension']}"
-        )
-        return dir_path / filename
-
-    return final_df_filtered.apply(build_path, axis=1).tolist()
-
-# Generate the list of target files for the `all` rule to consume
-OUTPUTS_EMBED_PANEL = get_outputs_embed_panel()
-OUTPUTS_EMBED_PANEL_PLOT = get_outputs_embed_panel_plot()
 
 
 

@@ -1,0 +1,14 @@
+[project]
+channels = ["conda-forge", "rapidsai"]
+name = "rapids"
+platforms = ["linux-64"]
+version = "0.1.0"
+channel-priority = "disabled"
+
+[tasks]
+
+[dependencies]
+rapids = { version = "==25.2", channel = "rapidsai" }
+
+[system-requirements]
+cuda = "12"
