@@ -23,10 +23,11 @@ def main(args):
     """
     Main function to run the CellCharter pipeline.
     """
+    print("Arguments:", args)
+
     # --- 1. Define Paths and Parameters ---
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    print("Output directory:", output_dir)
 
     # Define output file paths based on the output directory
     output_labels_path = output_dir / "labels.parquet"
@@ -49,8 +50,8 @@ def main(args):
 
     # Apply filters based on CLI arguments
     segmentations_filter = [args.segmentation]
-    conditions_filter = [args.condition] if args.condition else None
-    panels_filter = [args.panel] if args.panel else None
+    conditions_filter = [args.condition] if args.condition != "all" else None
+    panels_filter = [args.panel] if args.panel != "all" else None
 
     # Discover Xenium sample paths
     xenium_paths, _ = discover_xenium_paths(
@@ -83,6 +84,8 @@ def main(args):
         adata.obs["dataset_id"].tolist(), index=adata.obs.index, columns=xenium_levels
     )
     adata.obs["correction_method"] = args.correction_method
+
+    assert "spatial" in adata.obsm
 
     # --- 3. Preprocess Data ---
     print("Preprocessing data...")

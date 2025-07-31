@@ -77,7 +77,7 @@ parser$add_argument(
     "--normalisation",
     type = "character",
     required = TRUE,
-    help = "The specific normalisation to process (e.g., 'lognorm').",
+    help = "The specific normalisation to process (e.g., 'lognorm')."
 )
 
 parser$add_argument(
@@ -94,7 +94,7 @@ args <- parser$parse_args()
 #     input_dir = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/processed/std_seurat_analysis/",
 #     results_dir = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/results/xenium/embed_and_cluster_panel/raw",
 #     output_file = "test.rds",
-#     segmentation = "10x_0um",
+#     segmentation = "proseg_expected",
 #     condition = "CRC_PDO",
 #     panel = "hImmune_v1_dapi",
 #     pattern = "preprocessed/preprocessed_seurat.rds",
@@ -104,7 +104,7 @@ args <- parser$parse_args()
 # --- 3. Main Script Logic ---
 cat("=================================================================\n")
 cat(sprintf(
-    "Starting Seurat Concatenation for:\n -> Segmentation: %s\n -> Condition:    %s\n",
+    "Starting Seurat Concatenation for:\n -> Segmentation: %s\n -> Condition:    %s \n -> Panel:        %s\n -> Normalisation: %s\n",
     args$segmentation,
     args$condition,
     args$panel,
@@ -137,8 +137,8 @@ all_files <- list.files(
 )
 
 # Filter to ensure the full path suffix matches exactly
-seurat_files <- seurat_files[str_ends(
-    seurat_files,
+seurat_files <- all_files[str_ends(
+    all_files,
     file.path(args$normalisation, args$pattern)
 )]
 
@@ -314,14 +314,13 @@ combined_df <- combined_df %>%
             sep = "_"
         )
     ) %>%
-    mutate(full_cell_id = paste(dataset_id, cell, sep = "_"))
-combined_df <- combined_df %>%
+    mutate(full_cell_id = paste(dataset_id, cell, sep = "_")) %>%
     as.data.frame() %>%
     column_to_rownames(var = "full_cell_id")
 
 # b) Find the intersection: which cells from your df are ACTUALLY in the Seurat object?
 # This is our final list of cells to keep.
-cells_to_keep <- intersect(df_prepared$full_cell_id, colnames(merged_seurat))
+cells_to_keep <- intersect(rownames(combined_df), colnames(merged_seurat))
 
 cat(sprintf(
     "Found %d cells with metadata that are present in the Seurat object.\n",
@@ -343,13 +342,59 @@ cat(sprintf(
 
 # Create the final, smaller Seurat object
 seurat_subset <- subset(merged_seurat, cells = cells_to_keep)
+combined_df <- combined_df[colnames(seurat_subset), ] # just in case make sure order is the same
 
-# Add the metadata
+# Add metadata
 seurat_subset <- AddMetaData(
     object = seurat_subset,
     metadata = combined_df
 )
 
+
+# Add UMAP embeddings
+cat("\n--- Processing UMAP Embeddings ---\n")
+umap_prefixes <- c("lognorm", "lognorm_scaled")
+
+for (prefix in umap_prefixes) {
+    # a. Dynamically define the column names we are looking for in this iteration
+    umap_col_1 <- paste0(prefix, "_UMAP1")
+    umap_col_2 <- paste0(prefix, "_UMAP2")
+
+    # b. THE CRITICAL CHECK: Verify that BOTH UMAP columns exist.
+    #    If they don't, issue a warning and skip to the next prefix.
+    if (!all(c(umap_col_1, umap_col_2) %in% colnames(combined_df))) {
+        warning(sprintf(
+            "Skipping '%s' because one or both UMAP columns ('%s', '%s') were not found in the data.",
+            prefix,
+            umap_col_1,
+            umap_col_2
+        ))
+        next # This immediately jumps to the next iteration of the loop
+    }
+
+    # If the code reaches here, it means the columns were found.
+    cat(sprintf("Found and processing UMAP for: '%s'\n", prefix))
+
+    # c. Create the numeric matrix for the current UMAP set
+    umap_matrix <- as.matrix(combined_df[, c(umap_col_1, umap_col_2)])
+
+    # d. Create a unique key and a name for the reduction slot
+    reduction_key <- paste0(toupper(prefix), "_") # e.g., "LOGNORM_"
+    reduction_name <- paste0("umap_", prefix) # e.g., "umap_lognorm"
+
+    # e. Create the DimReduc object
+    current_reduction <- CreateDimReducObject(
+        embeddings = umap_matrix,
+        key = toupper(prefix),
+        assay = DefaultAssay(seurat_subset)
+    )
+
+    # f. Assign the DimReduc object to its unique slot in the Seurat object
+    seurat_subset[[reduction_name]] <- current_reduction
+
+    cat(sprintf(" -> Successfully added reduction '%s'\n", reduction_name))
+}
+cat("--- Finished processing UMAP embeddings ---\n\n")
 
 # --- Step 4: Verification and Save ---
 cat(sprintf(" -> Final object has %d cells.\n", ncol(seurat_subset)))

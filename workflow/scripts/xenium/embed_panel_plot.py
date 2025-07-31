@@ -75,8 +75,8 @@ obs = pd.read_parquet(embed_file)
 obs["cell_id"] = obs.index
 
 # fix name for proseg
-if "proseg" in segmentation.stem:
-    obs["segmentation"] = segmentation.stem
+# if "proseg" in segmentation.stem:
+#     obs["segmentation"] = segmentation.stem
 
 
 if color == "sample":
@@ -183,14 +183,11 @@ if facet:
             loc="center left",
             bbox_to_anchor=(1, 0.5),
             frameon=False,
+            markerscale=10,
         )
-        handles = g.legend.legend_handles
-        for handle in handles:
-            if hasattr(handle, "set_sizes"):
-                handle.set_sizes([100])
-            elif hasattr(handle, "set_linewidth"):
-                handle.set_linewidth(20)
+
         g.tight_layout(rect=[0, 0, 0.9, 0.96])
+
 
 else:
     figsize = (10, 10) if points_only else (12, 10)
@@ -216,21 +213,8 @@ else:
 
         plt.title(title)
 
-        handles, labels = ax.get_legend_handles_labels()
-        for handle in handles:
-            if hasattr(handle, "set_sizes"):
-                handle.set_sizes([100])
-            elif hasattr(handle, "set_linewidth"):
-                handle.set_linewidth(20)
-
         ax.legend(
-            handles=handles,
-            labels=labels,
-            loc="center left",
-            bbox_to_anchor=(1, 0.5),
-            title=params,  # Use the column name as the legend title
-            frameon=False,
-            fontsize="medium",  # Optional: adjust font size
+            loc="center left", bbox_to_anchor=(1, 0.5), title=params, frameon=False, fontsize="medium", markerscale=3
         )
 
         # f.legend(

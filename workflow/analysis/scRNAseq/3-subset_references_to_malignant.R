@@ -15,16 +15,16 @@ datasets_config <- list(
         output_path = cfg$scrnaseq_reference_GSE178341_malignant_seurat,
         malignant_cell_name = "Epi"
     ),
-    # gse236581 = list(
-    #     path = cfg$scrnaseq_reference_GSE236581_seurat,
-    #     output_path = cfg$scrnaseq_reference_GSE236581_malignant_seurat,
-    #     malignant_cell_name = 'Epi'
-    # ),
-    marteau = list(
-        path = cfg$scrnaseq_reference_marteau_seurat,
-        output_path = cfg$scrnaseq_reference_marteau_malignant_seurat,
-        malignant_cell_name = "Cancer cell"
+    gse236581 = list(
+        path = cfg$scrnaseq_reference_GSE236581_seurat,
+        output_path = cfg$scrnaseq_reference_GSE236581_malignant_seurat,
+        malignant_cell_name = 'Epi'
     )
+    # marteau = list(
+    #     path = cfg$scrnaseq_reference_marteau_seurat,
+    #     output_path = cfg$scrnaseq_reference_marteau_malignant_seurat,
+    #     malignant_cell_name = "Cancer cell"
+    # )
 )
 
 # --- Load all Seurat objects into a named list ---
@@ -39,7 +39,7 @@ cat("All objects loaded.\n\n")
 cat("========================================================\n")
 cat("Subsetting Malignant Cells From All Datasets\n")
 cat("========================================================\n")
-level_name = 'Level3'
+level_name = 'Level1'
 
 for (dataset_name in names(datasets_config)) {
     cat("\n--------------------------------------------------------\n")

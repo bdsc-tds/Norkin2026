@@ -711,6 +711,8 @@ def read_annotations(data_dict, correction_methods, xenium_annot_paths, level, m
     data_object = data_dict["raw"][list(data_dict["raw"])[0]]
     if isinstance(data_object, spatialdata.SpatialData):
         is_sdata = True
+    else:
+        is_sdata = False
 
     # --- Process 'raw' in parallel ---
     with ThreadPoolExecutor(max_workers=max_workers) as executor:

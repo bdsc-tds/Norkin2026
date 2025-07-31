@@ -11,16 +11,16 @@ rule run_cellcharter:
         X_cellcharter= RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}/X_cellcharter.parquet",
         scvi_model=    directory(RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}/scvi_model"),
         cc_models=     directory(RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}/cellcharter_models"),
+        output_dir=    directory(RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}")
     params:
         normalisation='lognorm',
         reference='GEO_GSE178341',
         method='rctd_class_aware',
         level='Level1',
         # The script will create this directory; we just need to pass its path.
-        output_dir=RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}",
         pixi_env=PIXI_ENV_CELLCHARTER
     log:
-        "logs/xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}.log"
+        LOG_DIR / "xenium/cellcharter/{correction_method}/{segmentation}/{condition}/{panel}.log"
     resources:
         mem='50G',
         runtime='2h',
@@ -33,7 +33,7 @@ rule run_cellcharter:
             --count-correction-dir {input.count_correction_dir} \
             --seurat-analysis-dir {input.seurat_analysis_dir} \
             --cell-type-annotation-dir {input.cell_type_annotation_dir} \
-            --output-dir {params.output_dir} \
+            --output-dir {output.output_dir} \
             --correction-method {wildcards.correction_method} \
             --segmentation {wildcards.segmentation} \
             --condition {wildcards.condition} \
@@ -56,23 +56,24 @@ rule run_cellcharter_cohort:
     output:
         plot=          RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/autok_stability.png",
         labels=        RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/labels.parquet",
-        X_scvi=        RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/X_scvi.parquet",
-        X_cellcharter= RESULTS_DIR/"xenium/cellcharter/{correction_method}/{segmentation}/X_cellcharter.parquet",
+        X_scvi=        RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/X_scvi.parquet",
+        X_cellcharter= RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/X_cellcharter.parquet",
         scvi_model=    directory(RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/scvi_model"),
         cc_models=     directory(RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}/cellcharter_models"),
+        output_dir=    directory(RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}")
     params:
         normalisation='lognorm',
         reference='GEO_GSE178341',
         method='rctd_class_aware',
         level='Level1',
+        
         # The script will create this directory; we just need to pass its path.
-        output_dir=RESULTS_DIR/"xenium/cellcharter_cohort/{correction_method}/{segmentation}",
         pixi_env=PIXI_ENV_CELLCHARTER
     log:
-        "logs/cellcharter_cohort/{correction_method}/{segmentation}.log"
+        LOG_DIR / "xenium/cellcharter_cohort/{correction_method}/{segmentation}.log"
     resources:
         mem='100G',
-        runtime='12h',
+        runtime='8h',
         slurm_partition = "gpu",
         slurm_extra = '--gres=gpu:1',
     shell:
@@ -82,11 +83,11 @@ rule run_cellcharter_cohort:
             --count-correction-dir {input.count_correction_dir} \
             --seurat-analysis-dir {input.seurat_analysis_dir} \
             --cell-type-annotation-dir {input.cell_type_annotation_dir} \
-            --output-dir {params.output_dir} \
+            --output-dir {output.output_dir} \
             --correction-method {wildcards.correction_method} \
             --segmentation {wildcards.segmentation} \
-            --condition None \
-            --panel None \
+            --condition 'all' \
+            --panel 'all' \
             --normalisation {params.normalisation} \
             --reference {params.reference} \
             --method {params.method} \

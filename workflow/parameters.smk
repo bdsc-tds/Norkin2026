@@ -59,6 +59,7 @@ def generate_wildcard_constraints(*param_objects):
 # --- Paths from main config ---
 PIXI_ENV = 'norkin-organoid'
 PIXI_ENV_CELLCHARTER = 'cellcharter'
+LOG_DIR = Path(config['log_dir'])
 RESULTS_DIR = Path(config['results_dir'])
 FIGURES_DIR = Path(config['figures_dir'])
 PALETTE_DIR = Path(config['xenium_metadata_dir'])

@@ -11,9 +11,9 @@ include: "rules/1-embedding_plot.smk"
 
 rule all:
     input:
-        rules.concatenate_seurat_by_segmentation_all.input,
+        # rules.concatenate_seurat_by_segmentation_all.input,
         # rules.embed_and_cluster_panel_all.input,
-        # rules.embed_panel_plot_all.input,
+        rules.embed_panel_plot_all.input,
         # rules.embed_panel_corrected_counts_all.input,
         # rules.embed_panel_corrected_counts_plot_all.input,
         #

@@ -23,7 +23,7 @@ rule embed_and_cluster_panel:
         min_dist="{min_dist}",
         pixi_env=PIXI_ENV
     log:
-        "logs/xenium/embed_and_cluster_panel/raw/{segmentation}/{condition}/{panel}/{normalisation}/umap_{layer}_n_comps={n_comps}_n_neighbors={n_neighbors}_min_dist={min_dist}_metric={metric}.log"
+        LOG_DIR / "xenium/embed_and_cluster_panel/raw/{segmentation}/{condition}/{panel}/{normalisation}/umap_{layer}_n_comps={n_comps}_n_neighbors={n_neighbors}_min_dist={min_dist}_metric={metric}.log"
     resources:
         mem=lambda wildcards: '100G' if wildcards.panel == '5k' else '50G',
         runtime=lambda wildcards: '8h' if wildcards.panel == '5k' else '3h',

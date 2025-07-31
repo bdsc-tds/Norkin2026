@@ -32,7 +32,7 @@ rule embed_panel_plot:
         sample_palette=SAMPLE_PALETTE,
         pixi_env=PIXI_ENV
     log:
-        "logs/xenium/embed_panel_plot/raw/{segmentation}/{condition}/{panel}/{normalisation}/{plot_type}_{layer}_n_comps={n_comps}_n_neighbors={n_neighbors}_min_dist={min_dist}_metric={metric}_{reference}_{method}_{color}.{extension}.log"
+        LOG_DIR / "xenium/embed_panel_plot/raw/{segmentation}/{condition}/{panel}/{normalisation}/{plot_type}_{layer}_n_comps={n_comps}_n_neighbors={n_neighbors}_min_dist={min_dist}_metric={metric}_{reference}_{method}_{color}.{extension}.log"
     resources:
         mem='30G',
         runtime='10m'
