@@ -65,10 +65,13 @@ def xenium_specs(path):
 
 
 ######### Xenium readers
+
+
 def discover_xenium_paths(
     analysis_dir: Path,
     data_dir: Path,
     annotation_dir: Optional[Path] = None,
+    post_correction_annotation_dir: Optional[Path] = None,
     correction_dir: Optional[Path] = None,
     normalisation: Optional[str] = None,
     reference: Optional[str] = None,
@@ -79,19 +82,6 @@ def discover_xenium_paths(
     conditions_filter: Optional[List[str]] = None,
     panels_filter: Optional[List[str]] = None,
 ):
-    """
-    Discovers Xenium sample paths with optional, high-performance filtering.
-
-    Args:
-        analysis_dir: Path to the base directory for Seurat analysis.
-        data_dir: Path to the base directory containing the raw Xenium data.
-        segmentations_filter: Optional list of segmentation names to include.
-        conditions_filter: Optional list of condition names to include.
-        panels_filter: Optional list of panel names to include.
-
-    Returns:
-        A tuple of two standard dictionaries: (xenium_paths, xenium_annot_paths).
-    """
     # Use sets for fast lookups (O(1)). This is much faster than list lookups.
     seg_set = set(segmentations_filter) if segmentations_filter else None
     cond_set = set(conditions_filter) if conditions_filter else None
@@ -99,6 +89,7 @@ def discover_xenium_paths(
 
     xenium_paths = defaultdict(dict)
     xenium_annot_paths = defaultdict(dict)
+    xenium_post_count_correction_annot_paths = defaultdict(dict)
 
     glob_pattern = "*/*/*/*/*"
     for sample_path in analysis_dir.glob(glob_pattern):
@@ -130,6 +121,13 @@ def discover_xenium_paths(
                     f"{name}/{normalisation}/reference_based/{reference}/{method}/{level}/single_cell/labels.parquet"
                 )
                 xenium_annot_paths["raw"][k] = annot_path
+
+            if post_correction_annotation_dir is not None:
+                post_correction_annot_path = post_correction_annotation_dir / (
+                    f"{name}/{normalisation}/reference_based/{reference}/{method}/{level}/single_cell/"
+                    f"split_fully_purified/lognorm/reference_based/{reference}/{method}/{level}/single_cell/labels.parquet"
+                )
+                xenium_annot_paths["split_fully_purified"][k] = post_correction_annot_path
 
         if "split_fully_purified" in correction_methods_filter:
             corrected_base = (
@@ -676,7 +674,13 @@ def get_anndata_from_object(data_object):
         return data_object
 
 
-def read_annotations(data_dict, correction_methods, xenium_annot_paths, level, max_workers=8):
+def read_annotations(
+    data_dict,
+    correction_methods,
+    xenium_annot_paths,
+    level,
+    max_workers=8,
+):
     """
     Assigns cell type annotation (and filters NaN cells) for a dictionary of AnnData objects using parallel threads.
 
@@ -703,9 +707,19 @@ def read_annotations(data_dict, correction_methods, xenium_annot_paths, level, m
             ad.obs[level] = labels
             ad = ad[ad.obs[level].notna()].copy()
         else:
-            print(f"Could not find annotation file for {k}")
+            print(f"Could not find annotation file for {k}:", annot_path)
 
-        return (k, ad)
+        if "split_fully_purified" in xenium_annot_paths:
+            annot_path = xenium_annot_paths["split_fully_purified"].get(k)
+            if annot_path and Path(annot_path).exists():
+                labels = pd.read_parquet(annot_path).set_index("cell_id").iloc[:, 0]
+                if k[0] == "proseg_expected" and "proseg-" not in labels.index:
+                    labels.index = "proseg-" + labels.index
+                ad.obs[level + "_split_fully_purified"] = labels
+            else:
+                print(f"Could not find post correction annotation file for {k}:", annot_path)
+
+        return k, ad
 
     # Check if dict contains spatialdata or anndata
     data_object = data_dict["raw"][list(data_dict["raw"])[0]]
@@ -740,6 +754,9 @@ def read_annotations(data_dict, correction_methods, xenium_annot_paths, level, m
             raw_ad = data_dict["raw"][k]
             if level in raw_ad.obs:
                 ad_.obs[level] = raw_ad.obs[level]
+                if "split_fully_purified" in xenium_annot_paths:
+                    ad_.obs[level + "_split_fully_purified"] = raw_ad.obs[level + "_split_fully_purified"]
+
                 ad_ = ad_[ad_.obs[level].notna()].copy()
                 data_dict[correction_method][k] = ad_
             else:

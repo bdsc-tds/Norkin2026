@@ -63,6 +63,9 @@ pytorch-gpu = "*"
 cuda-version = "12.6.*"
 bbknn = ">=1.6.0,<2"
 pot = ">=0.9.5,<0.10"
+scikit-bio = ">=0.7.0,<0.8"
+python-igraph = ">=0.11.9,<0.12"
+leidenalg = ">=0.10.2,<0.11"
 
 [feature.cellcharter.pypi-dependencies]
 cellcharter = ">=0.3.5, <0.4"
