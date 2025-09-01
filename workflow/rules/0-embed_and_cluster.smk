@@ -86,4 +86,6 @@ def get_outputs_embed_and_cluster_panel():
 rule embed_and_cluster_panel_all:
     input:
         get_outputs_embed_and_cluster_panel()
+    output:
+        touch(RESULTS_DIR / "xenium/embed_and_cluster_panel/.done")
 

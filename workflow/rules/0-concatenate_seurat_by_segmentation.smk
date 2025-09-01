@@ -1,14 +1,14 @@
 rule concatenate_seurat_by_segmentation:
     input:
+        embed_and_cluster_is_done=RESULTS_DIR / "xenium/embed_and_cluster_panel/.done",
         data_dir=STD_SEURAT_ANALYSIS_DIR,
-        results_dir=RESULTS_DIR / "xenium/embed_and_cluster_panel/raw"
     output:
         # The output file, with wildcards for segmentation and condition
         rds=RESULTS_DIR/"xenium/concatenate_seurat_by_segmentation/raw/{segmentation}_{condition}_{panel}_{normalisation}.rds"
     log:
         LOG_DIR / "xenium/concatenate_seurat_by_segmentation/raw/{segmentation}_{condition}_{panel}_{normalisation}.log"
     params:
-        # We pass the wildcards as parameters to the script
+        results_dir=RESULTS_DIR / "xenium/embed_and_cluster_panel/raw",
         segmentation="{segmentation}",
         condition="{condition}",
         panel="{panel}",
@@ -22,7 +22,7 @@ rule concatenate_seurat_by_segmentation:
         """
         pixi run -e {params.pixi_env} Rscript workflow/scripts/xenium/concatenate_samples_by_segmentation.R \
             --input-dir {input.data_dir} \
-            --results-dir {input.results_dir} \
+            --results-dir {params.results_dir} \
             --output-file {output.rds} \
             --segmentation {params.segmentation} \
             --condition {params.condition} \
