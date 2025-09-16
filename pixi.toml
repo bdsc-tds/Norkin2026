@@ -70,6 +70,7 @@ decoupler-py = ">=2.1.1,<3"
 
 [feature.cellcharter.pypi-dependencies]
 cellcharter = ">=0.3.5, <0.4"
+concord-sc = ">=1.0.8, <2"
 
 [feature.cellcharter.tasks]
 add-kernels = "python -m ipykernel install --user --name norkin_organoid --display-name 'Python (norkin_organoid)'"
