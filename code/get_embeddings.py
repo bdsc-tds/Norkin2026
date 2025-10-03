@@ -600,6 +600,7 @@ def polygon_to_mask(polygons, scale=True, output_size=(224, 224), padding_ratio=
     
     return mask
 
+
 class NorkinOrganoidDataset(torch.utils.data.Dataset):
     def __init__(
         self, 
@@ -608,7 +609,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         fill=False,
         organoid_cell_mapping_path="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/results/xenium/segment_organoids/organoids_ids.parquet",
         raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
-        save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v2',
+        save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v3',
     ):
         """
         Args:
@@ -675,7 +676,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         # input params
         correction_method = 'raw'
         segmentation = 'proseg_expected'
-        condition = 'CRC_PDO'
+        condition = ['CRC_PDO','CRC_PDO_CAF', 'CRC_PDO_DEV']  
         panel = 'all'
 
         xenium_dir = Path(cfg['xenium_processed_dir'])
@@ -713,7 +714,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             level=level,
             correction_methods_filter=[correction_method],
             segmentations_filter=[segmentation],
-            conditions_filter=[condition] if condition != 'all' else None,
+            conditions_filter=[*condition] if condition != 'all' else None,
             panels_filter=[panel] if panel != 'all' else None
         )
 
@@ -737,15 +738,18 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
     def _process_raw_data_from_sdata(self):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
+        organoid_cell_mapping = organoid_cell_mapping[['component_and_cluster_labels']]
         # organoid_cell_mapping = organoid_cell_mapping[organoid_cell_mapping['Organoid_ID'] > 0]
 
         print("Loaded anndata...")
-        if not os.path.exists("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads.pkl"):
+        if not os.path.exists("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl"):
             ads = self._get_spatial_anndatas()
-            joblib.dump(ads, "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads.pkl")
+            joblib.dump(ads, "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl")
         else:
-            ads = joblib.load("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads.pkl")
+            ads = joblib.load("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl")
         print("Loaded anndata.")
+
+        import pdb; pdb.set_trace()
 
         max_pixel_side_length = -np.inf
         dfs = {}
@@ -966,6 +970,107 @@ def get_morphological_features(masks):
     
     return features
 
+def get_morphological_features(masks):
+    """
+    Compute morphological features for each binary mask, measuring properties of all regions collectively.
+    
+    Args:
+        masks: List of binary masks (2D numpy arrays)
+        
+    Returns:
+        List of dictionaries containing morphological features for each mask
+    """
+    from skimage.measure import label, regionprops
+    from skimage.morphology import convex_hull_image
+    from scipy import ndimage as ndi
+    from tqdm import tqdm
+    import numpy as np
+
+    features = []
+    for mask in tqdm(masks, desc="Calculating morphological features"):
+        # Label connected components
+        labeled = label(mask)
+        regions = regionprops(labeled)
+        
+        # Initialize aggregated features
+        mask_features = {
+            'area': 0,
+            'perimeter': 0,
+            'eccentricity': 0,
+            'solidity': 0,
+            'extent': 0,
+            'major_axis_length': 0,
+            'minor_axis_length': 0,
+            'convex_hull_blank_percentage': 0,
+            'perimeter_sharpness': 0,
+            'median_distance_to_edge': 0,
+            'num_holes': 0,
+            'interior_holes_percentage': 0
+        }
+        
+        if len(regions) > 0:
+            # Calculate convex hull for all regions together
+            combined_mask = labeled > 0
+            convex_hull = convex_hull_image(combined_mask)
+            
+            # Calculate blank pixels in convex hull
+            blank_pixels = np.sum(convex_hull & ~combined_mask)
+            hull_pixels = np.sum(convex_hull)
+            blank_percentage = (blank_pixels / hull_pixels) * 100 if hull_pixels > 0 else 0
+            
+            # Calculate perimeter sharpness using gradient magnitude
+            sobel_x = ndi.sobel(combined_mask.astype(float), axis=0)
+            sobel_y = ndi.sobel(combined_mask.astype(float), axis=1)
+            gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+            
+            # Perimeter sharpness: mean gradient magnitude at the boundary
+            perimeter_mask = ndi.binary_dilation(combined_mask) & ~combined_mask
+            perimeter_sharpness = np.mean(gradient_magnitude[perimeter_mask]) if np.any(perimeter_mask) else 0
+            
+            # Calculate median distance to edge using distance transform
+            distance_transform = ndi.distance_transform_edt(combined_mask)
+            median_distance = np.median(distance_transform[combined_mask]) if np.any(combined_mask) else 0
+            
+            # Calculate number of holes (inverted regions in convex hull)
+            inverted_in_hull = convex_hull & ~combined_mask
+            labeled_holes = label(inverted_in_hull)
+            num_holes = np.max(labeled_holes)  # Number of connected hole regions
+            
+            # Calculate interior holes percentage - black points completely surrounded by white
+            # Fill all holes in the binary mask
+            filled_mask = ndi.binary_fill_holes(combined_mask)
+            
+            # Interior holes are the difference between filled mask and original mask
+            interior_holes = filled_mask & ~combined_mask
+            interior_holes_count = np.sum(interior_holes)
+            total_object_pixels = np.sum(combined_mask)
+            
+            # Calculate percentage of interior holes relative to total object area
+            if total_object_pixels > 0:
+                interior_holes_percentage = (interior_holes_count / total_object_pixels) * 100
+            else:
+                interior_holes_percentage = 0
+            
+            # Aggregate properties across all regions
+            mask_features = {
+                'area': sum(r.area for r in regions),
+                'perimeter': sum(r.perimeter for r in regions),
+                'eccentricity': np.mean([r.eccentricity for r in regions]),
+                'solidity': np.mean([r.solidity for r in regions]),
+                'extent': np.mean([r.extent for r in regions]),
+                'major_axis_length': np.mean([r.major_axis_length for r in regions]),
+                'minor_axis_length': np.mean([r.minor_axis_length for r in regions]),
+                'convex_hull_blank_percentage': blank_percentage,
+                'perimeter_sharpness': perimeter_sharpness,
+                'median_distance_to_edge': median_distance,
+                'num_holes': num_holes,
+                'interior_holes_percentage': interior_holes_percentage
+            }
+        
+        features.append(mask_features)
+    
+    return features
+
 def get_resnet152_embeddings(X, morphological_features=None, fine_tune=False, 
                            num_epochs=5, learning_rate=1e-4, batch_size=32,
                            validation_split=0.2, early_stopping_patience=None):
@@ -1143,5 +1248,5 @@ if __name__ == "__main__":
 
     print("training...")
     embeddings = get_resnet152_embeddings(masks, morphological_features=morph_data_matrix, fine_tune=True)
-    with open("embeddings_resnet152_filled.pkl", "wb") as f:
+    with open("embeddings_resnet152_v3_filled.pkl", "wb") as f:
         pickle.dump(embeddings, f)
