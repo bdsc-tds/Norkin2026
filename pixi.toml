@@ -5,26 +5,37 @@ name = "norkin_organoid"
 platforms = ["linux-64"]
 version = "0.1.0"
 
+[activation.env]
+LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+
+[pypi-options]
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://download.pytorch.org/whl/cu117"]
+
 [tasks]
+add-kernels = """
+pixi run -e norkin-organoid python -m ipykernel install --user --name norkin-organoid --display-name 'Python (norkin-organoid)'
+pixi run -e cellcharter python -m ipykernel install --user --name cellcharter --display-name 'Python (cellcharter)'
+"""
 
 [dependencies]
 python = "<=3.11"
 tmux = ">=3.5,<4"
-
-[environments]
-norkin-organoid = ["norkin-organoid"]
-
-[feature.norkin-organoid.tasks]
-add-kernel = "python -m ipykernel install --user --name norkin_organoid --display-name 'Python (norkin_organoid)'"
-fix-genomeinfodb = "R -e 'BiocManager::install('GenomeInfoDbData')'"
-
-[feature.norkin-organoid.dependencies]
 spatialdata = ">=0.4.0,<0.5"
 spatialdata-io = ">=0.2.0,<0.3"
 spatialdata-plot = ">=0.2.10,<0.3"
 ipykernel = ">=6.29.5,<7"
 scanpy = ">=1.11.2,<2"
-r-seurat = { version = ">=5.3.0,<6", channel = "conda-forge" }
+
+[environments]
+norkin-organoid = ["norkin-organoid"]
+cellcharter = ["cellcharter"]
+
+[feature.norkin-organoid.tasks]
+fix-genomeinfodb = 'R --vanilla -e "BiocManager::install(\"GenomeInfoDbData\")"'
+
+[feature.norkin-organoid.dependencies]
+r-seurat = { version = "<5.3.0", channel = "conda-forge" }
 "r-this.path" = { version = ">=2.7.0,<3", channel = "conda-forge" }
 bioconductor-s4vectors = { version = ">=0.40.2,<0.45", channel = "bioconda" }
 bioconductor-singlecellexperiment = { version = ">=1.24.0,<2", channel = "bioconda" }
@@ -34,3 +45,33 @@ bioconductor-genomeinfodb = { version = ">=1.38.1,<2", channel = "bioconda" }
 r-biocmanager = { version = ">=1.30.26,<2", channel = "conda-forge" }
 r-readr = ">=2.1.5,<3"
 r-hdf5r = ">=1.3.12,<2"
+snakemake = ">=9.8.0,<10"
+r-argparse = ">=2.2.5,<3"
+scvi-tools = ">=1.3.2,<2"
+python-igraph = ">=0.11.9,<0.12"
+r-arrow = ">=19.0.1,<20"
+
+[feature.cellcharter.system-requirements]
+cuda = "12.0"
+
+[feature.cellcharter.dependencies]
+numpy = "<2"
+zarr = "<3.0.0"
+scvi-tools = ">=1.3.2,<2"
+scipy = ">=1.16.0,<2"
+pytorch-gpu = "*"
+cuda-version = "12.6.*"
+bbknn = ">=1.6.0,<2"
+pot = ">=0.9.5,<0.10"
+scikit-bio = ">=0.7.0,<0.8"
+python-igraph = ">=0.11.9,<0.12"
+leidenalg = ">=0.10.2,<0.11"
+decoupler-py = ">=2.1.1,<3"
+rasterio = ">=1.4.3,<2"
+
+[feature.cellcharter.pypi-dependencies]
+cellcharter = ">=0.3.5, <0.4"
+concord-sc = ">=1.0.8, <2"
+
+[feature.cellcharter.tasks]
+add-kernels = "python -m ipykernel install --user --name norkin_organoid --display-name 'Python (norkin_organoid)'"

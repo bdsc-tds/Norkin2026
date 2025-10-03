@@ -110,7 +110,7 @@ if __name__ == "__main__":
     # Get configuration and define paths
     cfg = readwrite.config()
     input_path = os.path.join(cfg["scrnaseq_references_dir"], "Marteau2024/core_atlas-adata.h5ad")
-    output_path = input_path.replace(".h5ad", "_subsampled.rds")  # Added suffix for clarity
+    output_path = cfg["scrnaseq_reference_marteau_seurat"]
 
     # Run the conversion
     convert_h5ad_to_seurat_rds(input_path, output_path)

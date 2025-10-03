@@ -1,0 +1,23 @@
+configfile: "config/config.yml"
+include: "parameters.smk"
+
+wildcard_constraints:
+    **WILDCARD_CONSTRAINTS #from parameters.smk
+
+include: "rules/0-concatenate_seurat_by_segmentation.smk"
+include: "rules/0-run_cellcharter.smk"
+include: "rules/0-embed_and_cluster.smk"
+include: "rules/1-embedding_plot.smk"
+
+rule all:
+    input:
+        rules.concatenate_seurat_by_segmentation_all.input,
+        # rules.embed_and_cluster_panel_all.input,
+        # rules.embed_panel_plot_all.input,
+        # rules.embed_panel_corrected_counts_all.input,
+        # rules.embed_panel_corrected_counts_plot_all.input,
+        #
+        # rules.run_cellcharter_all.input,
+        # rules.run_cellcharter_cohort_all.input,
+        #
+
