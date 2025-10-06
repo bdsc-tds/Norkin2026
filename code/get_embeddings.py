@@ -641,6 +641,8 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         self.save_path = save_path
         self.scale = scale
         self.standardize_scale = standardize_scale
+        
+        self.organoid_dfs = {}
         self.organoid_masks = {}
         self.organoid_bboxes = {}
         self.organoid_square_bboxes = {}
@@ -658,6 +660,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 self.organoid_square_bboxes = data_obj['organoid_square_bboxes']
                 self.organoid_joint_ids = data_obj['organoid_joint_ids']
                 self.organoid_joint_ids_encoded = data_obj['organoid_joint_ids_encoded']
+                self.organoid_dfs = data_obj['organoid_dfs']
                 self.organoid_ids = data_obj['organoid_ids']
         else:
             # Process parquet files if no saved masks exist
@@ -749,8 +752,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             ads = joblib.load("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl")
         print("Loaded anndata.")
 
-        import pdb; pdb.set_trace()
-
         max_pixel_side_length = -np.inf
         dfs = {}
         
@@ -816,6 +817,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 self.organoid_bboxes[key] = organoid_bboxes[key]
                 self.organoid_square_bboxes[key] = organoid_square_bboxes[key]
                 self.organoid_joint_ids[key] = joint_id
+                self.organoid_dfs[key] = joined_df
                 self.organoid_ids.append(key)
 
             print(f"created {len(organoid_masks)} organoids from joint id {joint_id}")
@@ -882,6 +884,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 "organoid_square_bboxes": self.organoid_square_bboxes,
                 "organoid_joint_ids": self.organoid_joint_ids,
                 "organoid_joint_ids_encoded": self.organoid_joint_ids_encoded,
+                "organoid_dfs": self.organoid_dfs,
                 "organoid_ids": self.organoid_ids,
             }, f)
         print(f"Saved {len(self.organoid_masks)} organoid masks to {self.save_path}")
@@ -889,9 +892,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.organoid_masks)
     
-    # def __getitem__(self, idx):
-    #     # Convert numpy array to torch tensor and add channel dimension
-    #     return torch.FloatTensor(self.organoid_masks[list(self.organoid_masks.keys())[idx]]).unsqueeze(0)
     def __getitem__(self, idx):
         if isinstance(idx, slice):
             # Handle slice objects and return a batched tensor
