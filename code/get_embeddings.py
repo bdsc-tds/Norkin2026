@@ -641,7 +641,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         self.save_path = save_path
         self.scale = scale
         self.standardize_scale = standardize_scale
-        
+
         self.organoid_dfs = {}
         self.organoid_masks = {}
         self.organoid_bboxes = {}
@@ -667,6 +667,23 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             self._process_raw_data_from_sdata()
             self._save_masks()
 
+    def get_organoid_df_by_id(self, patient_id=None, joint_id=None):
+        if patient_id is None and joint_id is None:
+            raise Exception("patient ID must be a part of joint id.")
+        if patient_id is not None and joint_id is not None:
+            raise Exception("only patient id or joint id must be provided.")
+        if patient_id is not None:
+            id = patient_id
+        if joint_id is not None:
+            id = joint_id
+        
+        for proseg_id_tuple, joined_df in self.organoid_dfs.items(): 
+            complete_key = "_".join(proseg_id_tuple)
+            if id in complete_key:
+                return joined_df
+        
+        raise Exception(f"no element with id {id} found.")
+    
     def _get_spatial_anndatas(self):
         import sys
         sys.path.append('/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/workflow/scripts')
@@ -776,6 +793,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                         how='inner')
 
             # Get organoid IDs with at least 20 cells
+            # to be clear, "component_and_cluster_labels" is organoid id... don't ask why :P 
             organoid_counts = joined_df['component_and_cluster_labels'].value_counts()
             valid_organoids = organoid_counts[organoid_counts >= self.organoid_count_threshold].index
 
@@ -794,7 +812,8 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 "joined_df": joined_df,
                 "max_pixel_side_length": max_pixel_side_length
             }
-
+            
+            self.organoid_dfs[proseg_key] = joined_df
             print(f"Max pixel side length across all organoids: {max_pixel_side_length}")
 
         max_pixel_side_length = max([obj['max_pixel_side_length'] for obj in dfs.values()])
@@ -817,7 +836,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 self.organoid_bboxes[key] = organoid_bboxes[key]
                 self.organoid_square_bboxes[key] = organoid_square_bboxes[key]
                 self.organoid_joint_ids[key] = joint_id
-                self.organoid_dfs[key] = joined_df
                 self.organoid_ids.append(key)
 
             print(f"created {len(organoid_masks)} organoids from joint id {joint_id}")
