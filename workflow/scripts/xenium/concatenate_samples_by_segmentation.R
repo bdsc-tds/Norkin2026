@@ -212,15 +212,21 @@ if (length(seurat_list) > 1) {
     )
 } else if (length(seurat_list) == 1) {
     cat(
-        "\nOnly one object found. No merging needed. Saving the single annotated object.\n"
+        "\nOnly one object found. No merging needed. Annotating and renaming cells of the single object.\n"
     )
     merged_seurat <- seurat_list[[1]]
+
+    new_cell_names <- paste(dataset_ids[1], colnames(merged_seurat), sep = "_")
+    merged_seurat <- RenameCells(merged_seurat, new.names = new_cell_names)
+    cat(sprintf(" -> Renamed %d cells with prefix '%s'\n", ncol(merged_seurat), dataset_ids[1]))
+
     # Set project name for consistency
     Project(merged_seurat) <- paste(
         args$segmentation,
         args$condition,
         sep = "_"
     )
+
 } else {
     stop("Error: No valid Seurat objects could be loaded. Exiting.")
 }
@@ -327,6 +333,10 @@ cat(sprintf(
     length(cells_to_keep)
 ))
 if (length(cells_to_keep) == 0) {
+    cat("df cell names:\n")
+    print(rownames(combined_df)[1:5])
+    cat("seurat cell names:\n")
+    print(colnames(merged_seurat)[1:5])
     stop(
         "No matching cells found after join. Please check cell barcode formats."
     )

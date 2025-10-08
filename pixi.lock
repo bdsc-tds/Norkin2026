@@ -901,6 +901,9 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-genomicranges-1.54.1-r43ha9d7317_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-iranges-2.36.0-r43ha9d7317_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-matrixgenerics-1.14.0-r43hdfd78af_3.tar.bz2
+      - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5-2.46.1-r43hf17093f_1.tar.bz2
+      - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5filters-1.14.1-r43hf17093f_1.tar.bz2
+      - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5lib-1.24.0-r43ha9d7317_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-s4arrays-1.2.0-r43ha9d7317_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-s4vectors-0.40.2-r43ha9d7317_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/bioconductor-singlecellexperiment-1.24.0-r43hdfd78af_0.tar.bz2
@@ -2441,6 +2444,49 @@ packages:
   license: Artistic-2.0
   size: 463773
   timestamp: 1714738267792
+- conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5-2.46.1-r43hf17093f_1.tar.bz2
+  sha256: 487320b32edeb285eb6f14ccf814eb6fb50a152f81de5e5c365be26caade1ec1
+  md5: 6f35a5658cd0c5a7aa2fc347e8dc15f0
+  depends:
+  - bioconductor-rhdf5filters >=1.14.0,<1.15.0
+  - bioconductor-rhdf5filters >=1.14.1,<1.15.0a0
+  - bioconductor-rhdf5lib >=1.24.0,<1.25.0
+  - bioconductor-rhdf5lib >=1.24.0,<1.25.0a0
+  - bioconductor-s4vectors >=0.40.0,<0.41.0
+  - bioconductor-s4vectors >=0.40.2,<0.41.0a0
+  - libblas >=3.9.0,<4.0a0
+  - libgcc-ng >=12
+  - liblapack >=3.9.0,<4.0a0
+  - libstdcxx-ng >=12
+  - r-base >=4.3,<4.4.0a0
+  license: Artistic-2.0
+  size: 3094570
+  timestamp: 1715279433283
+- conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5filters-1.14.1-r43hf17093f_1.tar.bz2
+  sha256: d98218abfab325554222f6768651fa13bdaf11ae75f507847a99c8087b3cce5b
+  md5: 9ee7c8344b04f246477e9aa58ee52f11
+  depends:
+  - bioconductor-rhdf5lib >=1.24.0,<1.25.0
+  - bioconductor-rhdf5lib >=1.24.0,<1.25.0a0
+  - libblas >=3.9.0,<4.0a0
+  - libgcc-ng >=12
+  - liblapack >=3.9.0,<4.0a0
+  - libstdcxx-ng >=12
+  - r-base >=4.3,<4.4.0a0
+  license: BSD_2_clause + file LICENSE
+  size: 572627
+  timestamp: 1715108399823
+- conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-rhdf5lib-1.24.0-r43ha9d7317_2.tar.bz2
+  sha256: 8e8e1e3c14e4fbec874ef3695cbff469919cc968231fc785eb11c5dee98b36f8
+  md5: e0791242d82e772142dce0305fadb89c
+  depends:
+  - libblas >=3.9.0,<4.0a0
+  - libgcc-ng >=12
+  - liblapack >=3.9.0,<4.0a0
+  - r-base >=4.3,<4.4.0a0
+  license: Artistic-2.0
+  size: 4093488
+  timestamp: 1714736569937
 - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-s4arrays-1.2.0-r43ha9d7317_2.tar.bz2
   sha256: e5b022a6fb042b597a9c48b1c202d0b0351f55ccdfef57c2b118653b119ac2df
   md5: 28fd3fe7fd8d087c1cfa7805bbd16661

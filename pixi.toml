@@ -31,6 +31,7 @@ scanpy = ">=1.11.4,<2"
 norkin-organoid = ["norkin-organoid"]
 cellcharter = ["cellcharter"]
 
+
 [feature.norkin-organoid.tasks]
 fix-genomeinfodb = 'R --vanilla -e "BiocManager::install(\"GenomeInfoDbData\")"'
 
@@ -50,6 +51,7 @@ r-argparse = ">=2.2.5,<3"
 scvi-tools = ">=1.3.2,<2"
 python-igraph = ">=0.11.9,<0.12"
 r-arrow = ">=19.0.1,<20"
+bioconductor-rhdf5 = { version = ">=2.46.1,<3", channel = "bioconda" }
 
 [feature.cellcharter.system-requirements]
 cuda = "12.0"
