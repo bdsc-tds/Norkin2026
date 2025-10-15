@@ -12,7 +12,7 @@ else
 fi
 
 # Create directories
-mkdir -p /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/images/
+mkdir -p /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h\&e/images/
 mkdir -p logs
 
 echo "=== Generating organoid manifest..."
@@ -38,9 +38,9 @@ while IFS=, read -r patient_id organoid_id status; do
     # Submit individual job
     sbatch << EOF
 #!/bin/bash
-#SBATCH --job-name=org_${patient_id}_${INDEX}
-#SBATCH --output=logs/org_${patient_id}_${INDEX}.out
-#SBATCH --error=logs/org_${patient_id}_${INDEX}.err
+#SBATCH --job-name=org_${patient_id}_${INDEX}_${organoid_id}
+#SBATCH --output=logs/org_${patient_id}_${INDEX}_${organoid_id}.out
+#SBATCH --error=logs/org_${patient_id}_${INDEX}_${organoid_id}.err
 #SBATCH --time=04:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=1

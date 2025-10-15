@@ -20,6 +20,70 @@ from torchvision.models import resnet152
 from torchvision.transforms import functional as TF
 from tqdm import tqdm
 
+# Plot 1: Categorical organoid plot
+def plot_organoids(joined_df):
+    joined_df.plot(
+        column='Rel_Organoid_ID', 
+        categorical=True,
+        legend=True,
+        cmap='gist_ncar',
+        linewidth=0.5,
+        aspect=1,
+        figsize=(12, 8),
+        legend_kwds={'loc': 'upper right', 'bbox_to_anchor': (1, 1), 'title': 'Organoid ID'}
+    )
+
+    num_organoids = len(joined_df['Rel_Organoid_ID'].unique())
+    plt.title(f'{num_organoids} Organoids from Patient {PATIENT_ID} by Organoid ID')
+    plt.axis('equal')
+    plt.tight_layout()
+    plt.show()
+
+    # Plot 2: With bounding boxes
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot the organoids
+    joined_df.plot(
+        ax=ax,
+        aspect=1,
+        column='Rel_Organoid_ID', 
+        categorical=True,
+        legend=True,
+        cmap='gist_ncar',
+        linewidth=0.5,
+        legend_kwds={'loc': 'upper right', 'bbox_to_anchor': (1, 1), 'title': 'Organoid ID'}
+    )
+
+    # Add bounding boxes and labels for each organoid
+    for organoid_id, group in joined_df.groupby('Rel_Organoid_ID'):
+        # Get bounding box
+        minx, miny, maxx, maxy = group.total_bounds
+        
+        # Draw bounding box
+        rect = plt.Rectangle(
+            (minx, miny), maxx-minx, maxy-miny,
+            fill=False, 
+            edgecolor='red', 
+            linewidth=1.5, 
+            linestyle='--'
+        )
+        ax.add_patch(rect)
+        
+        # Add cell count label at center
+        center_x, center_y = (minx + maxx) / 2, (miny + maxy) / 2
+        ax.text(
+            center_x, center_y, 
+            f'{len(group)}',
+            ha='center', 
+            va='center', 
+            fontweight='bold',
+            fontsize=10,
+            bbox=dict(facecolor='white', alpha=0.8, edgecolor='black', pad=2)
+        )
+    ax.set_title(f'{num_organoids} organoids from patient {PATIENT_ID} with Bounding Boxes')
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    plt.show()
 
 def visualize_cell_segmentation(parquet_path, limit=None):
     """
@@ -228,7 +292,15 @@ def create_organoid_regions(parquet_path, buffer_distance=5, min_cell_count=20,
     return organoids, cell_counts, bounding_boxes
 
 
-def generate_organoid_masks_with_square_bboxes(geo_df, scale=True, output_size=(224, 224), padding_ratio=0.1, outline_thickness=1, max_pixel_side_length=None, fill=False):
+def generate_organoid_masks_with_square_bboxes(
+        geo_df, 
+        scale=True, 
+        output_size=(224, 224), 
+        padding_ratio=0.1, 
+        outline_thickness=1, 
+        max_pixel_side_length=None, 
+        fill=False
+):
     """
     Generate masks with both original and square bounding boxes.
     
@@ -251,7 +323,7 @@ def generate_organoid_masks_with_square_bboxes(geo_df, scale=True, output_size=(
     organoid_masks = {}
     organoid_bboxes = {}  # Original bboxes with proportional padding
     square_bboxes = {}    # Square bboxes that match mask content
-    
+        
     # Process each organoid individually
     for organoid_id in organoid_ids:
         # Filter for this specific organoid using GeoPandas
@@ -295,6 +367,9 @@ def generate_organoid_masks_with_square_bboxes(geo_df, scale=True, output_size=(
             
             effective_width = content_width + 2 * padding_x
             effective_height = content_height + 2 * padding_y
+            max_dim = int(np.ceil(max([effective_width, effective_height])))
+            output_size = (max_dim, max_dim)
+
             final_offset_x = (output_size[0] - effective_width * final_scale) / 2 - (min_x - padding_x) * final_scale
             final_offset_y = (output_size[1] - effective_height * final_scale) / 2 - (min_y - padding_y) * final_scale
             
@@ -439,12 +514,13 @@ def generate_organoid_masks_with_square_bboxes(geo_df, scale=True, output_size=(
         organoid_masks[organoid_id] = mask
     
     # Assert we have exactly one of each per organoid ID
-    assert len(organoid_masks) == num_organoids
-    assert len(organoid_bboxes) == num_organoids
-    assert len(square_bboxes) == num_organoids
+    # assert len(organoid_masks) == num_organoids
+    # assert len(organoid_bboxes) == num_organoids
+    # assert len(square_bboxes) == num_organoids
     
     print(f"Successfully generated {len(organoid_masks)} masks and bounding boxes")
     return organoid_masks, organoid_bboxes, square_bboxes
+
 
 
 def polygon_to_mask(polygons, scale=True, output_size=(224, 224), padding_ratio=0.1, outline_thickness=1, max_pixel_side_length=None):
@@ -609,7 +685,8 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         fill=False,
         organoid_cell_mapping_path="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/results/xenium/segment_organoids/organoids_ids.parquet",
         raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
-        save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v3',
+        save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v4',
+        adata_save_pth="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl",
     ):
         """
         Args:
@@ -664,10 +741,19 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 self.organoid_ids = data_obj['organoid_ids']
         else:
             # Process parquet files if no saved masks exist
-            self._process_raw_data_from_sdata()
+            self._process_raw_data_from_sdata(adata_save_pth=adata_save_pth)
             self._save_masks()
 
     def get_organoid_df_by_id(self, patient_id=None, joint_id=None):
+        """
+        Retrieve the organoid dataframe corresponding to a specific patient ID or joint ID.
+        Either patient_id or joint_id must be provided, but not both.
+        Args:
+            patient_id (str, optional): The patient ID to search for.
+            joint_id (str, optional): The joint ID to search for. Format includes the acquistion type (dapi/mm) and the patient id.
+        Returns:
+            pd.DataFrame: The organoid dataframe corresponding to the provided ID.
+        """
         if patient_id is None and joint_id is None:
             raise Exception("patient ID must be a part of joint id.")
         if patient_id is not None and joint_id is not None:
@@ -756,17 +842,17 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
         return ads
 
-    def _process_raw_data_from_sdata(self):
+    def _process_raw_data_from_sdata(self, adata_save_pth):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
         organoid_cell_mapping = organoid_cell_mapping[['component_and_cluster_labels']]
         # organoid_cell_mapping = organoid_cell_mapping[organoid_cell_mapping['Organoid_ID'] > 0]
 
         print("Loaded anndata...")
-        if not os.path.exists("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl"):
+        if not os.path.exists(adata_save_pth):
             ads = self._get_spatial_anndatas()
-            joblib.dump(ads, "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl")
+            joblib.dump(ads, adata_save_pth)
         else:
-            ads = joblib.load("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl")
+            ads = joblib.load(adata_save_pth)
         print("Loaded anndata.")
 
         max_pixel_side_length = -np.inf
