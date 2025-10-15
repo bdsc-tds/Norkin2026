@@ -683,6 +683,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         scale=True,
         standardize_scale=False,
         fill=False,
+        use_cached_adata=True,
         organoid_cell_mapping_path="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/results/xenium/segment_organoids/organoids_ids.parquet",
         raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
         save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v4',
@@ -741,7 +742,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 self.organoid_ids = data_obj['organoid_ids']
         else:
             # Process parquet files if no saved masks exist
-            self._process_raw_data_from_sdata(adata_save_pth=adata_save_pth)
+            self._process_raw_data_from_sdata(adata_save_pth=adata_save_pth, use_cached_adata=use_cached_adata)
             self._save_masks()
 
     def get_organoid_df_by_id(self, patient_id=None, joint_id=None):
@@ -842,13 +843,13 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
         return ads
 
-    def _process_raw_data_from_sdata(self, adata_save_pth):
+    def _process_raw_data_from_sdata(self, adata_save_pth, use_cached_adata):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
         organoid_cell_mapping = organoid_cell_mapping[['component_and_cluster_labels']]
         # organoid_cell_mapping = organoid_cell_mapping[organoid_cell_mapping['Organoid_ID'] > 0]
 
         print("Loaded anndata...")
-        if not os.path.exists(adata_save_pth):
+        if not os.path.exists(adata_save_pth) or not use_cached_adata:
             ads = self._get_spatial_anndatas()
             joblib.dump(ads, adata_save_pth)
         else:
