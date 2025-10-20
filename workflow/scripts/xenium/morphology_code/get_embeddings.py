@@ -685,11 +685,12 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         standardize_scale=False,
         fill=False,
         use_cached_adata=True,
+        use_cached_masks=True,
         organoid_id_column_key='component_and_cluster_labels',
         organoid_cell_mapping_path="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/results/xenium/segment_organoids/organoids_ids.parquet",
         raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
         save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v4',
-        adata_save_pth="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/notebooks/ads_v2.pkl",
+        adata_save_pth="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/ads.pkl",
     ):
         """
         Args:
@@ -732,7 +733,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         self.organoid_count_threshold = 20
 
         # Try to load preprocessed masks if they exist
-        if os.path.exists(self.save_path) and isinstance(joblib.load(self.save_path), dict):
+        if use_cached_masks and os.path.exists(self.save_path) and isinstance(joblib.load(self.save_path), dict):
             print(f"Loading preprocessed masks from {self.save_path}")
             with open(self.save_path, 'rb') as f:
                 data_obj = pickle.load(f)
@@ -850,7 +851,9 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
         organoid_cell_mapping = organoid_cell_mapping[[self.organoid_id_column_key]]
 
-        print("Loaded anndata...")
+        print("Loading anndata...")
+        os.makedirs(os.path.dirname(adata_save_pth), exist_ok=True)
+
         if not os.path.exists(adata_save_pth) or not use_cached_adata:
             ads = self._get_spatial_anndatas()
             joblib.dump(ads, adata_save_pth)
@@ -915,6 +918,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 padding_ratio=0.1,
                 outline_thickness=1,
                 fill=self.fill,
+                organoid_id_column_key=self.organoid_id_column_key,
                 max_pixel_side_length=max_pixel_side_length if self.standardize_scale else None
             )
             joint_id = joined_df['joint_id'].iloc[0]

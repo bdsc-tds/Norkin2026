@@ -3,6 +3,7 @@ import sys
 import os
 import glob
 import argparse
+from matplotlib import pyplot as plt
 import tifffile
 import cv2
 import numpy as np
@@ -11,7 +12,7 @@ import spatialdata as sd
 import geopandas as gpd
 
 sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
-from norkin_organoid.code.get_embeddings import NorkinOrganoidDataset
+from norkin_organoid.workflow.scripts.xenium.morphology_code.get_embeddings import NorkinOrganoidDataset
 
 SCALE_FACTOR = 1 / 0.2125
 ALIGNMENTS_ROOT_PATH = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/alignments/{}_qupath_alignment_files"
@@ -143,6 +144,13 @@ def extract_lazyslide_features(organoid_id, joined_df=None, organoid_bbox=None, 
                        background_fraction=0.5,
                        return_tiles=True
     )
+
+    os.makedirs("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles", exist_ok=True)
+    zs.pl.tiles(wsi, 
+            tissue_id="all", 
+            linewidth=0.5)
+    plt.savefig(f"/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles/{organoid_id}.png", dpi=300)
+
     zs.tl.feature_extraction(wsi, model_type, amp=True)
 
     tile_coords_hne['geometry'] = tile_coords_hne['geometry'].translate(xoff=he_min_x, yoff=he_min_y)

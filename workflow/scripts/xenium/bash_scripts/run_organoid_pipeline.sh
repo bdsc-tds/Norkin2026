@@ -16,7 +16,7 @@ mkdir -p /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data
 mkdir -p logs
 
 echo "=== Generating organoid manifest..."
-/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/lazyslide_env/bin/python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/code/generate_manifest.py "${PATIENTS[@]}"
+/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/lazyslide_env/bin/python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/workflow/scripts/xenium/morphology_code/generate_manifest.py "${PATIENTS[@]}"
 
 MANIFEST_CSV="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_manifest.csv"
 TOTAL_JOBS=$(tail -n +2 "$MANIFEST_CSV" | wc -l)
@@ -45,7 +45,7 @@ while IFS=, read -r patient_id organoid_id status; do
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=1
 
-/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/lazyslide_env/bin/python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/code/extract_organoid.py "$patient_id" "$organoid_id"
+/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/lazyslide_env/bin/python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/workflow/scripts/xenium/morphology_code/extract_organoid.py "$patient_id" "$organoid_id"
 EOF
 
     ((INDEX++))

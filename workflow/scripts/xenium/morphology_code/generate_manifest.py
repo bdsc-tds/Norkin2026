@@ -8,7 +8,7 @@ import sys
 import pandas as pd
 
 sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
-from norkin_organoid.code.get_embeddings import NorkinOrganoidDataset
+from norkin_organoid.workflow.scripts.xenium.morphology_code.get_embeddings import NorkinOrganoidDataset
 
 # Default patients if none provided
 DEFAULT_PATIENTS = ["1CNN", "1GAA", "1GVB", "1J25", "14PT", "131N"]
