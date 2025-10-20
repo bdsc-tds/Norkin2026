@@ -889,6 +889,7 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-ucsc.utils-1.2.0-r44h9ee0642_1.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-xvector-0.46.0-r44h15a9599_2.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/linux-64/bioconductor-zlibbioc-1.52.0-r44h3df3fcb_2.tar.bz2
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/biom-format-2.1.17-py312h5253ce2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/blosc-1.21.6-he440d0b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/bokeh-3.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/branca-0.8.2-pyhd8ed1ab_0.conda
@@ -1452,6 +1453,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.14.0-ha3a3aed_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/s2n-1.5.26-h5ac9029_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/scanpy-1.11.4-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/scikit-bio-0.7.0-py312h4f23490_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scikit-image-0.25.2-py312hf79963d_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scikit-learn-1.7.2-py312h4f0b9e3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scipy-1.16.2-py312h7a1785b_0.conda

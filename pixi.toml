@@ -57,6 +57,7 @@ r-lmertest = ">=3.1_3,<4"
 pyqt = ">=5.15.11,<6"
 ipywidgets = ">=8.1.7,<9"
 anywidget = ">=0.9.18,<0.10"
+scikit-bio = ">=0.7.0,<0.8"
 
 [feature.norkin-organoid.pypi-dependencies]
 plotly = { version = ">=6.3.1, <7", extras = ["express"] }
