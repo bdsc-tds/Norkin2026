@@ -294,6 +294,7 @@ def create_organoid_regions(parquet_path, buffer_distance=5, min_cell_count=20,
 
 def generate_organoid_masks_with_square_bboxes(
         geo_df, 
+        organoid_id_column_key='component_and_cluster_labels',
         scale=True, 
         output_size=(224, 224), 
         padding_ratio=0.1, 
@@ -315,7 +316,7 @@ def generate_organoid_masks_with_square_bboxes(
     import geopandas as gpd
     
     # Get unique organoid IDs
-    organoid_ids = geo_df['component_and_cluster_labels'].unique()
+    organoid_ids = geo_df[organoid_id_column_key].unique()
     num_organoids = len(organoid_ids)
     print(f"Processing {num_organoids} organoids")
     
@@ -327,7 +328,7 @@ def generate_organoid_masks_with_square_bboxes(
     # Process each organoid individually
     for organoid_id in organoid_ids:
         # Filter for this specific organoid using GeoPandas
-        organoid_gdf = geo_df[geo_df['component_and_cluster_labels'] == organoid_id].copy()
+        organoid_gdf = geo_df[geo_df[organoid_id_column_key] == organoid_id].copy()
         
         # Skip if no geometries
         if len(organoid_gdf) == 0:
@@ -684,6 +685,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         standardize_scale=False,
         fill=False,
         use_cached_adata=True,
+        organoid_id_column_key='component_and_cluster_labels',
         organoid_cell_mapping_path="/work/PRTNR/CHUV/DIR/rgottar1/spatial/data/norkin_organoid/results/xenium/segment_organoids/organoids_ids.parquet",
         raw_data_path='/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/data/xenium/raw/CRC_PDO',
         save_path=f'/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_masks_official_v4',
@@ -715,6 +717,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
         self.fill = fill
         self.organoid_cell_mapping_path = organoid_cell_mapping_path
+        self.organoid_id_column_key = organoid_id_column_key
         self.raw_data_path = raw_data_path
         self.save_path = save_path
         self.scale = scale
@@ -845,8 +848,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
     def _process_raw_data_from_sdata(self, adata_save_pth, use_cached_adata):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
-        organoid_cell_mapping = organoid_cell_mapping[['component_and_cluster_labels']]
-        # organoid_cell_mapping = organoid_cell_mapping[organoid_cell_mapping['Organoid_ID'] > 0]
+        organoid_cell_mapping = organoid_cell_mapping[[self.organoid_id_column_key]]
 
         print("Loaded anndata...")
         if not os.path.exists(adata_save_pth) or not use_cached_adata:
@@ -881,14 +883,14 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
             # Get organoid IDs with at least 20 cells
             # to be clear, "component_and_cluster_labels" is organoid id... don't ask why :P 
-            organoid_counts = joined_df['component_and_cluster_labels'].value_counts()
+            organoid_counts = joined_df[self.organoid_id_column_key].value_counts()
             valid_organoids = organoid_counts[organoid_counts >= self.organoid_count_threshold].index
 
             # Filter the DataFrame
-            joined_df = joined_df[joined_df['component_and_cluster_labels'].isin(valid_organoids)]
-            joined_df = joined_df[joined_df['component_and_cluster_labels'] != 0]
+            joined_df = joined_df[joined_df[self.organoid_id_column_key].isin(valid_organoids)]
+            joined_df = joined_df[joined_df[self.organoid_id_column_key] != 0]
             
-            for organoid_id, group in joined_df.groupby('component_and_cluster_labels'):
+            for organoid_id, group in joined_df.groupby(self.organoid_id_column_key):
                 # Get bounding box
                 coords = group.total_bounds
                             # Update max pixel side length for standardization
@@ -945,7 +947,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 cell_boundary_pth, 
                 buffer_distance=5, 
                 min_cell_count=20, 
-                plot_results=False
+                plot_results=False,
             )
             all_organoids.extend(organoids)
 
@@ -1011,69 +1013,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         else:
             # Handle single integer indices
             return torch.FloatTensor(self.organoid_masks[list(self.organoid_masks.keys())[idx]]).unsqueeze(0)
-
-def get_morphological_features(masks):
-    """
-    Compute morphological features for each binary mask, measuring properties of all regions collectively.
-    
-    Args:
-        masks: List of binary masks (2D numpy arrays)
-        
-    Returns:
-        List of dictionaries containing morphological features for each mask
-    """
-    from skimage.measure import label, regionprops
-    from skimage.morphology import convex_hull_image
-    from tqdm import tqdm
-    import numpy as np
-
-    features = []
-    for mask in tqdm(masks, desc="Calculating morphological features"):
-        # Label connected components
-        labeled = label(mask)
-        regions = regionprops(labeled)
-        
-        # Initialize aggregated features
-        mask_features = {
-            'area': 0,
-            'perimeter': 0,
-            'eccentricity': 0,
-            'solidity': 0,
-            'extent': 0,
-            'major_axis_length': 0,
-            'minor_axis_length': 0,
-            'convex_hull_blank_percentage': 0
-        }
-        
-        if len(regions) > 0:
-            # Calculate convex hull for all regions together
-            combined_mask = labeled > 0
-            convex_hull = convex_hull_image(combined_mask)
-            
-            # Calculate blank pixels in convex hull
-            blank_pixels = np.sum(convex_hull & ~combined_mask)
-            hull_pixels = np.sum(convex_hull)
-            blank_percentage = (blank_pixels / hull_pixels) * 100 if hull_pixels > 0 else 0
-            
-            # Aggregate properties across all regions
-            mask_features = {
-                'area': sum(r.area for r in regions),
-                'perimeter': sum(r.perimeter for r in regions),
-                'eccentricity': np.mean([r.eccentricity for r in regions]),
-                'solidity': np.mean([r.solidity for r in regions]),
-                'extent': np.mean([r.extent for r in regions]),
-                'major_axis_length': np.mean([r.major_axis_length for r in regions]),
-                'minor_axis_length': np.mean([r.minor_axis_length for r in regions]),
-                'convex_hull_blank_percentage': blank_percentage
-            }
-        
-        features.append(mask_features)
-    
-    # Verify output length matches input length
-    assert len(features) == len(masks), \
-        f"Output length {len(features)} doesn't match input length {len(masks)}"
-    
-    return features
 
 def get_morphological_features(masks):
     """

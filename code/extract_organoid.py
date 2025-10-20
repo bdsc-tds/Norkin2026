@@ -7,6 +7,8 @@ import tifffile
 import cv2
 import numpy as np
 import pandas as pd
+import spatialdata as sd
+import geopandas as gpd
 
 sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
 from norkin_organoid.code.get_embeddings import NorkinOrganoidDataset
@@ -15,7 +17,7 @@ SCALE_FACTOR = 1 / 0.2125
 ALIGNMENTS_ROOT_PATH = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/alignments/{}_qupath_alignment_files"
 OUTPUT_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/images/"
 PREVIEW_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/image_previews/"
-FEATURES_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/features/"
+FEATURES_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/features_sdata/"
 
 def get_microscopy(patient_id):
     base_dir = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/ome_tiff_pyr"
@@ -28,38 +30,72 @@ def get_transform_matrix(patient_id):
     alignment_path = os.path.join(ALIGNMENTS_ROOT_PATH.format(patient_id), "matrix.csv")
     return pd.read_csv(alignment_path, header=None).to_numpy()
 
-def extract_reoriented_optimized(large_input_image, bbox, transform_matrix, output_size=None):
-    min_x, min_y, max_x, max_y = bbox * SCALE_FACTOR
-    
-    corners_original = np.array([[min_x, min_y, 1], [max_x, min_y, 1], [max_x, max_y, 1], [min_x, max_y, 1]]).T
-    corners_transformed = (transform_matrix @ corners_original).T
-    corners_transformed = corners_transformed[:, :2] / corners_transformed[:, 2:]
-    
-    x_min = max(0, int(np.floor(np.min(corners_transformed[:, 0]))))
-    y_min = max(0, int(np.floor(np.min(corners_transformed[:, 1]))))
-    x_max = min(large_input_image.shape[1], int(np.ceil(np.max(corners_transformed[:, 0]))))
-    y_max = min(large_input_image.shape[0], int(np.ceil(np.max(corners_transformed[:, 1]))))
+def get_geodf_affine_transform_matrix(matrix):
+    return [
+        matrix[0][0],  # a
+        matrix[0][1],  # b
+        matrix[1][0],  # d
+        matrix[1][1],  # e
+        matrix[0][2],  # xoff
+        matrix[1][2],  # yoff
+    ]
 
-    if output_size is None: output_size = (x_max - x_min, y_max - y_min)
 
-    roi = large_input_image[y_min:y_max, x_min:x_max]
-    if roi.size == 0: return np.zeros((output_size[1], output_size[0], large_input_image.shape[2]), dtype=large_input_image.dtype)
+def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organoid_id, output_size=None, organoid_id_column_key="component_and_cluster_labels"):
+    joined_df = joined_df.copy()
+    joined_df_sample = joined_df[joined_df[organoid_id_column_key] == organoid_id]
+    joined_df_sample['geometry'] = joined_df_sample['geometry'].scale(xfact=SCALE_FACTOR, yfact=SCALE_FACTOR, origin=(0,0))
+
+    organoid_to_histopath_matrix_geodf = [
+        transform_matrix[0][0],
+        transform_matrix[0][1],
+        transform_matrix[1][0],
+        transform_matrix[1][1],
+        transform_matrix[0][2],
+        transform_matrix[1][2],
+    ]
+
+    joined_df_sample['geometry'] = joined_df_sample['geometry'].affine_transform(organoid_to_histopath_matrix_geodf)
+    joined_df_sample['geometry'] = joined_df_sample['geometry'].buffer(distance=100)
     
-    map_x = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
-    map_y = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
+    histo_bounds = joined_df_sample.total_bounds
+    minx, miny, maxx, maxy = [int(coord) for coord in histo_bounds]
+    microscopy_cropped = microscopy[:, miny:maxy, minx:maxx]
+
+    return (minx, miny, maxx, maxy), joined_df, microscopy_cropped
+
+# def extract_reoriented_optimized(large_input_image, bbox, transform_matrix, output_size=None):
+#     min_x, min_y, max_x, max_y = bbox * SCALE_FACTOR
     
-    for y in range(output_size[1]):
-        for x in range(output_size[0]):
-            x_orig = min_x + (x / output_size[0]) * (max_x - min_x)
-            y_orig = min_y + (y / output_size[1]) * (max_y - min_y)
-            point_orig = np.array([x_orig, y_orig, 1])
-            point_img = transform_matrix @ point_orig
-            point_img = point_img[:2] / point_img[2]
-            map_x[y, x] = point_img[0] - x_min
-            map_y[y, x] = point_img[1] - y_min
+#     corners_original = np.array([[min_x, min_y, 1], [max_x, min_y, 1], [max_x, max_y, 1], [min_x, max_y, 1]]).T
+#     corners_transformed = (transform_matrix @ corners_original).T
+#     corners_transformed = corners_transformed[:, :2] / corners_transformed[:, 2:]
     
-    reoriented = cv2.remap(roi, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-    return reoriented
+#     x_min = max(0, int(np.floor(np.min(corners_transformed[:, 0]))))
+#     y_min = max(0, int(np.floor(np.min(corners_transformed[:, 1]))))
+#     x_max = min(large_input_image.shape[1], int(np.ceil(np.max(corners_transformed[:, 0]))))
+#     y_max = min(large_input_image.shape[0], int(np.ceil(np.max(corners_transformed[:, 1]))))
+
+#     if output_size is None: output_size = (x_max - x_min, y_max - y_min)
+
+#     roi = large_input_image[y_min:y_max, x_min:x_max]
+#     if roi.size == 0: return np.zeros((output_size[1], output_size[0], large_input_image.shape[2]), dtype=large_input_image.dtype)
+    
+#     map_x = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
+#     map_y = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
+    
+#     for y in range(output_size[1]):
+#         for x in range(output_size[0]):
+#             x_orig = min_x + (x / output_size[0]) * (max_x - min_x)
+#             y_orig = min_y + (y / output_size[1]) * (max_y - min_y)
+#             point_orig = np.array([x_orig, y_orig, 1])
+#             point_img = transform_matrix @ point_orig
+#             point_img = point_img[:2] / point_img[2]
+#             map_x[y, x] = point_img[0] - x_min
+#             map_y[y, x] = point_img[1] - y_min
+    
+#     reoriented = cv2.remap(roi, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+#     return reoriented
 
 def write_pyramidal_ome_tiff(array, filename):
     with tifffile.TiffWriter(filename, bigtiff=True) as tif:
@@ -84,7 +120,7 @@ def save_png_preview(result, organoid_id, root_dir=PREVIEW_DIR):
     cv2.imwrite(preview_path, cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
     return preview_path
 
-def extract_lazyslide_features(organoid_id, organoid_bbox=None, transform_matrix=None, model_type="plip", save_pth=FEATURES_DIR, tiff_pth=OUTPUT_DIR):
+def extract_lazyslide_features(organoid_id, joined_df=None, organoid_bbox=None, transform_matrix=None, model_type="plip", save_pth=FEATURES_DIR, tiff_pth=OUTPUT_DIR, he_min_x=None, he_min_y=None):
     import lazyslide as zs
     from wsidata import open_wsi 
     
@@ -98,41 +134,43 @@ def extract_lazyslide_features(organoid_id, organoid_bbox=None, transform_matrix
     wsi.set_mpp(8.625e-2)
     
     zs.pp.find_tissues(wsi)
-    zs.pp.tile_tissues(wsi,
+    tile_coords_hne, _ = zs.pp.tile_tissues(wsi,
                        256, 
                        overlap=2.0/3, 
                        mpp=0.50,
                        edge=False, 
                        background_filter=True,
                        background_fraction=0.5,
+                       return_tiles=True
     )
     zs.tl.feature_extraction(wsi, model_type, amp=True)
+
+    tile_coords_hne['geometry'] = tile_coords_hne['geometry'].translate(xoff=he_min_x, yoff=he_min_y)
+    tile_coords_xenium = tile_coords_hne.copy()
+    histopath_to_orgnanoid_matrix_geodf = get_geodf_affine_transform_matrix(transform_matrix)
+    tile_coords_xenium['geometry'] = tile_coords_xenium['geometry'].affine_transform(histopath_to_orgnanoid_matrix_geodf)
+    tile_coords_xenium['geometry'] = tile_coords_xenium['geometry'].scale(1/SCALE_FACTOR, 1/SCALE_FACTOR, origin=(0,0))
     
+    cells_in_tile = gpd.sjoin(joined_df, tile_coords_xenium, how='inner', predicate='intersects')
+    cells_in_tile = sd.models.ShapesModel.parse(cells_in_tile)
+    # Convert geometry to WKT string format
     adata = wsi.fetch.features_anndata(model_type)
-    
-    # # Add H&E coordinates to the AnnData object
-    # if organoid_bbox is not None and transform_matrix is not None:
-    #     # Get tile coordinates from lazyslide
-    #     tile_coords = wsi.tiles.coords
-        
-    #     # Transform coordinates back to original H&E space
-    #     he_coords = transform_tile_coords_to_he_space(tile_coords, organoid_bbox, transform_matrix)
-        
-    #     # Add coordinates to AnnData obs
-    #     adata.obs['he_x'] = he_coords[:, 0]
-    #     adata.obs['he_y'] = he_coords[:, 1]
-        
-    #     # Also store the original organoid bbox and transform info
-    #     adata.uns['organoid_bbox'] = organoid_bbox
-    #     adata.uns['transform_matrix'] = transform_matrix
-    #     adata.uns['organoid_id'] = organoid_id
-    
-    features_path = os.path.join(save_pth, f"{organoid_id}_features.h5ad")
-    adata.write(features_path)
+
+    sdata = sd.SpatialData(
+        shapes={
+            "tile_coords_hne": tile_coords_hne, 
+            "tile_coords_xenium": tile_coords_xenium,
+            "cells_in_tile": cells_in_tile,
+        },
+        tables={"features_adata": adata},
+    )
+
+    features_path = os.path.join(FEATURES_DIR, f"{organoid_id}_features.zarr")
+    sdata.write(features_path, overwrite=True)
     
     print(f"Features saved: {features_path} (shape: {adata.X.shape})")
-    # print(f"H&E coordinates added: {he_coords.shape}")
-    return adata
+
+    return sdata
 
 def transform_tile_coords_to_he_space(tile_coords, organoid_bbox, transform_matrix):
     """
@@ -177,7 +215,7 @@ def pad_image_evenly(image, target_dim, color=(0, 0, 0)):
     pad_bottom = pad_h - pad_top
     pad_left = pad_w // 2
     pad_right = pad_w - pad_left
-    
+
     padded_image = cv2.copyMakeBorder(
         image,
         top=pad_top,
@@ -193,22 +231,26 @@ def pad_image_evenly(image, target_dim, color=(0, 0, 0)):
 def main_from_args(patient_id, organoid_id, model_type):
     print(f"Processing {organoid_id} from {patient_id}")
     
-    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True)
+    organoid_id_column_key = 'component_and_cluster_and_lasso'
+    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=organoid_id_column_key)
+
     microscopy = get_microscopy(patient_id)
     transform_matrix = get_transform_matrix(patient_id)
-    
-    organoid_bbox = np.array(dataset.organoid_square_bboxes[organoid_id])
-    result = extract_reoriented_optimized(np.moveaxis(microscopy, 0, 2), organoid_bbox, np.linalg.inv(transform_matrix))
-    result = pad_image_evenly(result, target_dim=1500, color=(210, 207, 209))
-    
+
+    # organoid_bbox = np.array(dataset.organoid_square_bboxes[organoid_id])
+    # histopath_bbox, transformed_df, result = extract_reoriented_optimized(np.moveaxis(microscopy, 0, 2), organoid_bbox, np.linalg.inv(transform_matrix))
+    joined_df = dataset.get_organoid_df_by_id(patient_id=patient_id)
+    histopath_bbox, transformed_df, result = extract_reoriented_optimized(microscopy, joined_df, np.linalg.inv(transform_matrix), organoid_id=organoid_id, organoid_id_column_key=organoid_id_column_key)
+    result = pad_image_evenly(np.moveaxis(result, 0, 2), target_dim=1500, color=(210, 207, 209))
+
     output_path = os.path.join(OUTPUT_DIR, f"{organoid_id}.ome.tiff")
     write_pyramidal_ome_tiff(result, output_path)
     preview_path = save_png_preview(result, organoid_id)
-    
+
     # Pass the additional parameters to extract_lazyslide_features
-    adata = extract_lazyslide_features(organoid_id, organoid_bbox, transform_matrix, model_type)
+    sdata = extract_lazyslide_features(organoid_id, joined_df=joined_df, transform_matrix=transform_matrix, model_type=model_type, he_min_x=histopath_bbox[0], he_min_y=histopath_bbox[1])
     
-    return output_path, preview_path, adata
+    return output_path, preview_path, sdata
 
 def main_from_csv(manifest_csv, index, model_type):
     manifest_df = pd.read_csv(manifest_csv)

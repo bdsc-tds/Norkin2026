@@ -13,10 +13,11 @@ from norkin_organoid.code.get_embeddings import NorkinOrganoidDataset
 # Default patients if none provided
 DEFAULT_PATIENTS = ["1CNN", "1GAA", "1GVB", "1J25", "14PT", "131N"]
 OUTPUT_CSV = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_manifest.csv"
+ORGANOID_ID_COLUMN_KEY = "component_and_cluster_and_lasso"
 
 def generate_manifest(patient_ids):
     """Generate CSV with all patient-organoid combinations."""
-    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True)
+    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=ORGANOID_ID_COLUMN_KEY)
     
     manifest_data = []
     
@@ -25,7 +26,7 @@ def generate_manifest(patient_ids):
         
         try:
             joined_df = dataset.get_organoid_df_by_id(patient_id=patient_id)
-            organoid_ids = joined_df['component_and_cluster_labels'].unique().tolist()
+            organoid_ids = joined_df[dataset.organoid_id_column_key].unique().tolist()
             
             for organoid_id in organoid_ids:
                 manifest_data.append({
