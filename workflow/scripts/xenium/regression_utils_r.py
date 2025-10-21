@@ -80,7 +80,7 @@ def regress_gene_morphology(
 
         print(f"Using formula: {formula_str}")
 
-        for gene in tqdm(adata.var_names, desc=f"Fitting for {feature}", leave=False):
+        for gene in tqdm(adata.var_names, desc=f"Fitting for {feature}"):
             gene_model_df = model_data.copy()
             gene_model_df["gene_expression"] = expression_data[:, adata.var_names == gene].toarray().flatten()
 
