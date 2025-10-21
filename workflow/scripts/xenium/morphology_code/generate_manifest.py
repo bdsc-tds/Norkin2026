@@ -17,7 +17,7 @@ ORGANOID_ID_COLUMN_KEY = "component_and_cluster_and_lasso"
 
 def generate_manifest(patient_ids):
     """Generate CSV with all patient-organoid combinations."""
-    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=ORGANOID_ID_COLUMN_KEY)
+    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, use_cached_adata=False, use_cached_masks=False, organoid_id_column_key=ORGANOID_ID_COLUMN_KEY)
     
     manifest_data = []
     
