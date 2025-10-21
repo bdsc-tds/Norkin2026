@@ -17,6 +17,7 @@ xenium_std_seurat_analysis_dir: "data/xenium/processed/std_seurat_analysis/"
 xenium_cell_type_annotation_dir: "data/xenium/processed/cell_type_annotation/"
 xenium_post_count_correction_cell_type_annotation_dir: "data/xenium/processed/post_count_correction_cell_type_annotation/"
 
+scrnaseq_raw_dir: "data/scRNAseq/raw/"
 scrnaseq_processed_dir: "data/scRNAseq/processed/"
 scrnaseq_references_dir: "data/scRNAseq/processed/references/"
 

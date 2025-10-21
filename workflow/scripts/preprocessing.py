@@ -1063,7 +1063,7 @@ def plot_transfer_labels(adata, UMAP_KEY, BATCH_KEY, CT_KEYS):
         plt.show()
 
 
-def pseudobulk(ad, key):
+def pseudobulk(ad, key, mode="sum"):
     ad.obs[key] = ad.obs[key].astype(str)
 
     def _aggregate(x):
@@ -1072,15 +1072,20 @@ def pseudobulk(ad, key):
         except:
             return np.nan
 
-    means = {}
+    stats = {}
     for c in ad.obs[key].unique():
         # if pd.isna(c):
         #     idx = ad.obs[key].isna()
         # else:
         idx = ad.obs[key] == c
-        means[c] = np.asarray(ad[idx].X.mean(0)).squeeze()
+        if mode == "mean":
+            stats[c] = np.asarray(ad[idx].X.mean(0)).squeeze()
+        elif mode == "sum":
+            stats[c] = np.asarray(ad[idx].X.sum(0)).squeeze()
+        else:
+            raise ValueError("mode has to be sum or mean")
 
-    ad_states = sc.AnnData(pd.DataFrame(means).T)
+    ad_states = sc.AnnData(pd.DataFrame(stats).T)
     ad_states.var_names = ad.var_names
     ad_states.obs = ad.obs.groupby(key).agg(_aggregate)
     return ad_states
