@@ -1063,7 +1063,7 @@ def plot_transfer_labels(adata, UMAP_KEY, BATCH_KEY, CT_KEYS):
         plt.show()
 
 
-def pseudobulk(ad, key, mode="sum"):
+def pseudobulk(ad, key, mode="sum", agg_columns=None, layer=None):
     ad.obs[key] = ad.obs[key].astype(str)
 
     def _aggregate(x):
@@ -1072,6 +1072,10 @@ def pseudobulk(ad, key, mode="sum"):
         except:
             return np.nan
 
+    if agg_columns is None:
+        agg_columns = ad.obs.columns
+
+    X = ad.X if layer is None else ad.layers[layer]
     stats = {}
     for c in ad.obs[key].unique():
         # if pd.isna(c):
