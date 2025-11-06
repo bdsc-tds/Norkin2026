@@ -13,6 +13,7 @@ import spatialdata_io
 import warnings
 import anndata as ad
 import scanpy as sc
+import matplotlib.pyplot as plt
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -761,3 +762,95 @@ def read_annotations(
                 data_dict[correction_method][k] = ad_
             else:
                 print(f"Raw annotations missing for {k} when processing {correction_method}")
+
+
+def split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=True, figsize=(10, 10)):
+    """
+    This function takes a dict of AnnData or SpatialData objects, along with a mapping
+    of sample names to be split and corresponding coordinate from CSV files. For each specified
+    sample, it reads the coordinates defining spatial subregions, assigns new donor and
+    sample identifiers to the cells/spots that fall within each region, and optionally plots
+    the spatial split.
+        - The function modifies the `.obs` of each AnnData object in-place, adding or
+    updating the columns:
+        * "donor_corrected"
+        * "sample_corrected"
+
+    Args:
+        ads (dict):
+            Dictionary containing spatial transcriptomics data, typically structured as
+            `ads["raw"][sample_key] = AnnData or SpatialData` objects.
+        samples2split_dict (dict):
+            Mapping of merged sample names (keys) to their respective dataset keys (values)
+            within `ads["raw"]`.
+        coords_csv_dict (dict):
+            Mapping of sample names (keys) to CSV file paths (values). Each CSV must contain
+            columns ["x_min", "x_max", "y_min", "y_max", "Name", "Name_for_the_40_cohort",
+            "Need_40_cohort"] specifying the spatial subregion boundaries and metadata.
+        plot (bool, optional):
+            If True, generates a scatter plot showing the split subregions for each sample.
+            Defaults to True.
+
+    Returns:
+        Samples to exclude from analysis according to the coords csvs
+    """
+
+    samples2exclude = []
+
+    for name_sample, key_sample in samples2split_dict.items():
+        print(name_sample)
+        adata = ads["raw"][key_sample]
+
+        # Check if dict contains spatialdata or anndata
+        if not isinstance(adata, sc.AnnData):
+            adata = adata["table"]  # if sdata, extract table
+
+        sx, sy = adata.obsm["spatial"].T
+
+        if "donor" not in adata.obs.columns:
+            adata.obs["donor"] = key_sample[-2]
+        if "sample" not in adata.obs.columns:
+            adata.obs["sample"] = key_sample[-1]
+        adata.obs["donor_corrected"] = adata.obs["donor"]
+        adata.obs["sample_corrected"] = adata.obs["sample"]
+
+        # read coords
+        df_coords_samples2split = pd.read_csv(coords_csv_dict[name_sample])
+
+        # fill in nan names
+        nan_name = df_coords_samples2split["Name_for_the_40_cohort"].isna()
+        df_coords_samples2split.loc[nan_name, "Name_for_the_40_cohort"] = df_coords_samples2split.loc[nan_name, "Name"]
+
+        # define samples to exclude from the 40 cohort
+        samples2exclude.extend(
+            df_coords_samples2split.loc[df_coords_samples2split["Need_40_cohort"] != "Yes", "Name"].values
+        )
+
+        # split merged samples into unique sample names
+        idx_samples2split = adata.obs["donor"] == name_sample
+
+        for xmin, xmax, ymin, ymax, donor_name, sample_name in df_coords_samples2split[
+            ["x_min", "x_max", "y_min", "y_max", "Name_for_the_40_cohort", "Name"]
+        ].values:
+            idx = (sx >= xmin) & (sx <= xmax) & (sy >= ymin) & (sy <= ymax) & idx_samples2split
+            adata.obs.loc[idx, "donor_corrected"] = donor_name
+            adata.obs.loc[idx, "sample_corrected"] = sample_name
+
+        # plot split samples
+        if plot:
+            sx_, sy_ = adata[idx_samples2split].obsm["spatial"].T
+            plt.figure(figsize=figsize)
+
+            for i, c in zip(range(len(df_coords_samples2split)), plt.cm.tab20.colors):
+                xmin, xmax, ymin, ymax = df_coords_samples2split.iloc[i][["x_min", "x_max", "y_min", "y_max"]]
+                idx = (sx_ >= xmin) & (sx_ <= xmax) & (sy_ >= ymin) & (sy_ <= ymax)
+                plt.scatter(sx_[idx], sy_[idx], s=0.1, alpha=0.5, color=c)
+                plt.axis("scaled")
+            plt.show()
+
+        # subset to samples to keep
+        ix_keep_samples = (adata.obs["donor_corrected"] != name_sample) & (
+            ~adata.obs["sample_corrected"].isin(samples2exclude)
+        )
+        print("Removing", sum(~ix_keep_samples), f"cells from excluded samples of {name_sample}")
+        ads["raw"][key_sample] = adata[ix_keep_samples].copy()
