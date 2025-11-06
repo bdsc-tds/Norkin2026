@@ -849,6 +849,7 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
     def _process_raw_data_from_sdata(self, adata_save_pth, use_cached_adata):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
+        # import pdb; pdb.set_trace()
         organoid_cell_mapping = organoid_cell_mapping[[self.organoid_id_column_key]]
 
         print("Loading anndata...")

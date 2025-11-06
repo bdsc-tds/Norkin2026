@@ -121,7 +121,24 @@ def save_png_preview(result, organoid_id, root_dir=PREVIEW_DIR):
     cv2.imwrite(preview_path, cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
     return preview_path
 
-def extract_lazyslide_features(organoid_id, joined_df=None, organoid_bbox=None, transform_matrix=None, model_type="plip", save_pth=FEATURES_DIR, tiff_pth=OUTPUT_DIR, he_min_x=None, he_min_y=None):
+def extract_lazyslide_features(
+    organoid_id, 
+    joined_df=None, 
+    organoid_bbox=None, 
+    transform_matrix=None, 
+    model_type="plip", 
+    save_pth=FEATURES_DIR, 
+    tiff_pth=OUTPUT_DIR, 
+    he_min_x=None,
+    he_min_y=None,
+    tissue_selection_strategy="default"):
+    """
+    tissue selection strategies
+    1) "default": use lazyslide tissue detection on H&E image and use all of the secondary tissues
+    2) "segmentation_iou": use the segmentation mask with boundary in conjunction with an IOU requirement for the tissue
+    3) "largest": use the largest tissue in the segmentation mask.
+    """
+
     import lazyslide as zs
     from wsidata import open_wsi 
     
@@ -135,13 +152,14 @@ def extract_lazyslide_features(organoid_id, joined_df=None, organoid_bbox=None, 
     wsi.set_mpp(8.625e-2)
     
     zs.pp.find_tissues(wsi)
-    tile_coords_hne, _ = zs.pp.tile_tissues(wsi,
+    tile_coords_hne_relative, _ = zs.pp.tile_tissues(wsi,
                        256, 
                        overlap=2.0/3, 
                        mpp=0.50,
-                       edge=False, 
+                       edge=True, 
                        background_filter=True,
-                       background_fraction=0.5,
+                       background_filter_mode="exact",
+                       background_fraction=0.4,
                        return_tiles=True
     )
 
@@ -153,22 +171,42 @@ def extract_lazyslide_features(organoid_id, joined_df=None, organoid_bbox=None, 
 
     zs.tl.feature_extraction(wsi, model_type, amp=True)
 
-    tile_coords_hne['geometry'] = tile_coords_hne['geometry'].translate(xoff=he_min_x, yoff=he_min_y)
-    tile_coords_xenium = tile_coords_hne.copy()
+    tile_coords_hne_absolute = tile_coords_hne_relative.copy()
+    tile_coords_hne_absolute['geometry'] = tile_coords_hne_absolute['geometry'].translate(xoff=he_min_x, yoff=he_min_y)
+    tile_coords_xenium_absolute = tile_coords_hne_absolute.copy()
     histopath_to_orgnanoid_matrix_geodf = get_geodf_affine_transform_matrix(transform_matrix)
-    tile_coords_xenium['geometry'] = tile_coords_xenium['geometry'].affine_transform(histopath_to_orgnanoid_matrix_geodf)
-    tile_coords_xenium['geometry'] = tile_coords_xenium['geometry'].scale(1/SCALE_FACTOR, 1/SCALE_FACTOR, origin=(0,0))
+    tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].affine_transform(histopath_to_orgnanoid_matrix_geodf)
+    tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].scale(1/SCALE_FACTOR, 1/SCALE_FACTOR, origin=(0,0))
     
-    cells_in_tile = gpd.sjoin(joined_df, tile_coords_xenium, how='inner', predicate='intersects')
+    cells_in_tile = gpd.sjoin(joined_df, tile_coords_xenium_absolute, how='inner', predicate='intersects')
     cells_in_tile = sd.models.ShapesModel.parse(cells_in_tile)
     # Convert geometry to WKT string format
     adata = wsi.fetch.features_anndata(model_type)
 
+    # # do tile filtration here on the sdata object
+    # if tissue_selection_strategy == "default":
+    #     filter_indices = adata.index
+    # elif tissue_selection_strategy == "largest":
+    #     main_tissue_id = tile_coords_hne['tissue_id'].value_counts().idxmax()
+    #     filter_indices = tile_coords_hne['tissue_id'] == main_tissue_id 
+    # elif tissue_selection_strategy == "segmentation_iou":
+    #     raise ValueError(f"Unimplemented tissue selection strategy: {tissue_selection_strategy}")
+    # else:
+    #     raise ValueError(f"Unknown tissue selection strategy: {tissue_selection_strategy}")
+
+    # tile_coords_hne_filtered = tile_coords_hne[filter_indices]
+    # tile_coords_xenium_filtered = tile_coords_xenium[filter_indices]
+    # cells_in_tile_filtered = gpd.sjoin(joined_df, tile_coords_xenium_filtered, how='inner', predicate='intersects')
+
     sdata = sd.SpatialData(
         shapes={
-            "tile_coords_hne": tile_coords_hne, 
-            "tile_coords_xenium": tile_coords_xenium,
+            "tile_coords_hne_absolute": tile_coords_hne_absolute, 
+            "tile_coords_hne_relative": tile_coords_hne_relative, 
+            "tile_coords_xenium_absolute": tile_coords_xenium_absolute,
             "cells_in_tile": cells_in_tile,
+            # "tile_coords_hne_filtered": tile_coords_hne_filtered, 
+            # "tile_coords_xenium_filtered": tile_coords_xenium_filtered,
+            # "cells_in_tile_filtered": cells_in_tile_filtered,
         },
         tables={"features_adata": adata},
     )
@@ -257,6 +295,7 @@ def main_from_args(patient_id, organoid_id, model_type):
 
     # Pass the additional parameters to extract_lazyslide_features
     sdata = extract_lazyslide_features(organoid_id, joined_df=joined_df, transform_matrix=transform_matrix, model_type=model_type, he_min_x=histopath_bbox[0], he_min_y=histopath_bbox[1])
+    
     
     return output_path, preview_path, sdata
 

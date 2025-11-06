@@ -4,7 +4,8 @@
 
 # Set default patients if none provided
 if [ $# -eq 0 ]; then
-    PATIENTS=("1CNN" "1GAA" "1GVB" "1J25" "14PT" "131N")
+    # PATIENTS=("1CNN" "1GAA" "1GVB" "1J25" "14PT" "131N")
+    PATIENTS=("1HVQ" "1CNN" "077I" "1GAA" "1J25" "131N" "OWJ3" "14PT" "169V" "1BI7" "1CI5" "1FMS" "12NM" "0LR9" "1GVB" "1GNS")
     echo "No patients specified, using defaults: ${PATIENTS[*]}"
 else
     PATIENTS=("$@")

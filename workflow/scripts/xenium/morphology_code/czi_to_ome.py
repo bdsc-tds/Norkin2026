@@ -6,7 +6,10 @@ from aicsimageio.writers import OmeTiffWriter
 
 PATHS = {
     "run_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_1_HE_16-07-2025.czi", 
-    "run_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_2_HE-16-07-2025.czi"
+    "run_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_2_HE-16-07-2025.czi",
+    "run_3": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-002.czi",
+    "run_4_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-003.czi",
+    "run_4_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-004.czi",
 }
 
 CORRESPONDENCES = {
@@ -29,7 +32,28 @@ CORRESPONDENCES = {
         "OLR9",
         "1GVB",
         "1GNS"
-    ]
+    ],
+    "run_3": [
+        "0Z84",
+        "4_1HVQ_big",
+        "11_OY6H_middle_and_big",
+        "9_OY6H_middle_and_big",
+        "7_OY6Hsmall",
+        "1JET",
+        "5_1HVQ_big",
+        "12_OY6Hbighuge",
+        "10_OY6Hmiddlebig",
+        "8_OY6Hsmallmiddle",
+    ],
+    "run_4_2": [
+        "ScanRegion0",
+        "ScanRegion1",
+        "ScanRegion2",
+        "ScanRegion3",
+        "ScanRegion4",
+        "ScanRegion5",
+        "ScanRegion6",
+    ],
 }
 
 # import os
@@ -177,7 +201,7 @@ def process_image(run, index):
 if __name__ == "__main__":
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description="Process CZI images and convert to OME-TIFF format")
-    parser.add_argument("--run", required=True, choices=["run_1", "run_2"], 
+    parser.add_argument("--run", required=True, choices=["run_1", "run_2", "run_3", "run_4_2"], 
                        help="Which run to process (run_1 or run_2)")
     parser.add_argument("--index", type=int, required=True, 
                        help="Index of the image to process (0-based)")

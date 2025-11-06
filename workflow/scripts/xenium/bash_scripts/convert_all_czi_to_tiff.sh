@@ -1,22 +1,51 @@
 #!/bin/bash
 
-# Define ranges for scale_factor, blur, row, and col
-# runs=("run_1" "run_2")  # Example: 1 (no scaling), 2 (half size), 4 (quarter size)
-# indices=(0 1 2 3 4 5 6 7)
-runs=("run_1" "run_2")  # Example: 1 (no scaling), 2 (half size), 4 (quarter size)
-indices=(1 2 3 4 5 6 6 7)
-# methods=(1 2 3)
+# Path to your Python script and environment
+PYTHON_SCRIPT="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/workflow/scripts/xenium/morphology_code/czi_to_ome.py"
+PYTHON_PATH="/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/norkin_morphology/bin/python"
+
+# Define runs array - can be pre-populated or empty
+runs=("run_3" "run_4_2")
+
+# For pre-defined runs, get their indices from CORRESPONDENCES
+echo "Using pre-defined runs, computing indices from CORRESPONDENCES..."
+
+# First, declare the arrays
+for run in "${runs[@]}"; do
+    declare -a "indices_$run"
+done
+
+# Then populate them
+for run in "${runs[@]}"; do
+    # Get indices as a string and convert to array
+    indices_string=$($PYTHON_PATH -c "
+import sys
+sys.path.append('/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/workflow/scripts/xenium/morphology_code/')
+from czi_to_ome import CORRESPONDENCES
+
+if '$run' in CORRESPONDENCES:
+    id_list = CORRESPONDENCES['$run']
+    length = len(id_list)
+    indices = ' '.join(str(i) for i in range(length))
+    print(indices)
+")
+    
+    # Convert the string to an array
+    eval "indices_$run=($indices_string)"
+    
+    echo "Run $run has indices: ${indices_string}"
+done
 
 # Loop through all combinations of parameters
 for run in "${runs[@]}"; do
-  for index in "${indices[@]}"; do
-    # for method in "${methods[@]}"; do
-      echo "Running script with run=$run and index=$index and method=$method"
-      # sbatch --wrap="dcsrsoft use 20241118; module load miniforge3; conda_init; conda activate prometex; python3.10 run_registration.py --scale_factor $scale_factor --blur $blur --row $row --col $col" --time=12:00:00 --mem=16G
-      # sbatch --wrap="conda activate /work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/norkin_morphology; python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/code/czi_to_ome.py --run $run --index $index --method $method" --time=12:00:00 --mem=128G
-      sbatch --wrap="python /work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/code/czi_to_ome.py --run $run --index $index" --time=12:00:00 --mem=128G
-    # done
-  done
+    # Get the indices array for this run
+    var_name="indices_$run[@]"
+    indices=("${!var_name}")
+    
+    for index in "${indices[@]}"; do
+        echo "Running script with run=$run and index=$index"
+        sbatch --wrap="$PYTHON_PATH $PYTHON_SCRIPT --run $run --index $index" --time=12:00:00 --mem=128G
+    done
 done
 
 echo "Batch processing complete!"
