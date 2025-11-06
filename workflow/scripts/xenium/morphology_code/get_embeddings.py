@@ -781,29 +781,30 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
         raise Exception(f"no element with id {id} found.")
 
-    def _get_spatial_anndatas(self):
+    def _get_spatial_anndatas(
+        self,
+        correction_method="raw",
+        segmentation="proseg_expected",
+        condition=["CRC_PDO", "CRC_PDO_CAF", "CRC_PDO_DEV"],
+        panel="all",
+        normalisation="lognorm",
+        reference="GEO_GSE178341",
+        method="rctd_class_aware",
+        level="Level1",
+        plot=False,
+    ):
         import sys
 
-        sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/norkin_organoid/workflow/scripts")
+        sys.path.append("../../scripts")
         import readwrite
 
         cfg = readwrite.config()
 
         # input params
-        correction_method = "raw"
-        segmentation = "proseg_expected"
-        condition = ["CRC_PDO", "CRC_PDO_CAF", "CRC_PDO_DEV"]
-        panel = "all"
-
         xenium_dir = Path(cfg["xenium_processed_dir"])
         xenium_count_correction_dir = Path(cfg["xenium_count_correction_dir"])
         xenium_std_seurat_analysis_dir = Path(cfg["xenium_std_seurat_analysis_dir"])
         xenium_cell_type_annotation_dir = Path(cfg["xenium_cell_type_annotation_dir"])
-
-        normalisation = "lognorm"
-        reference = "GEO_GSE178341"
-        method = "rctd_class_aware"
-        level = "Level1"
 
         # read samples
         xenium_paths, xenium_annot_paths = readwrite.discover_xenium_paths(
@@ -832,6 +833,13 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
         # add cell type annotation from raw to all correction methods
         readwrite.read_annotations(ads, [correction_method], xenium_annot_paths, level, max_workers=8)
+
+        # add 'donor_corrected' and 'sample_corrected' labels to 18samples and 8samples
+        samples2split_dict = {k[-2]: k for k in ads["raw"].keys() if k[-2] in ["18samples", "8samples"]}
+        coords_csv_dict = {
+            k: cfg["xenium_metadata_dir"] + f"Regions_coordinates_{k}.csv" for k in ["18samples", "8samples"]
+        }
+        readwrite.split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=plot)
 
         return ads
 
