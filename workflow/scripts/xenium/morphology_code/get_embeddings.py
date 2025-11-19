@@ -796,7 +796,8 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         import sys
 
         sys.path.append("../../scripts")
-        import readwrite
+        sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
+        import norkin_organoid.workflow.scripts.readwrite as readwrite
 
         cfg = readwrite.config()
 

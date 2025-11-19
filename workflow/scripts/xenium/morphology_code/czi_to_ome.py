@@ -5,15 +5,37 @@ from aicsimageio import AICSImage
 from aicsimageio.writers import OmeTiffWriter
 
 PATHS = {
-    "run_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_1_HE_16-07-2025.czi", 
-    "run_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_2_HE-16-07-2025.czi",
+    "run_1_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/kgajera-11-11-2025-003.czi",
+    "run_1_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/kgajera-11-11-2025-004.czi",
+    "run_2_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_1_HE_16-07-2025.czi", 
+    "run_2_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/Xenium_PDO_run_2_2_HE-16-07-2025.czi",
     "run_3": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-002.czi",
-    "run_4_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-003.czi",
+    "run_4_1": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/norkin_18_samples_slide.czi",
     "run_4_2": "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/czi/amadurga-10-10-2025-004.czi",
 }
 
-CORRESPONDENCES = {
-    "run_1": [
+CORRESPONDENCES = { 
+    "run_1_1": [
+        "0Y6H",
+        "19II",
+        "14VS",
+        "OAFN",
+        "1CFW",
+        "077I_dont_use",
+        "12WP",
+        "OUC1",
+    ],
+    "run_1_2": [
+        "03FO",
+        "OYRI",
+        "1H3R",
+        "1GAA_dont_use",
+        "OWMY",
+        "1DCI",
+        "1EGQ",
+        "O056"
+    ],
+    "run_2_1": [
         "1HVQ",
         "1CNN", 
         "077I", 
@@ -23,7 +45,7 @@ CORRESPONDENCES = {
         "OWJ3",
         "14PT",
     ],
-    "run_2": [
+    "run_2_2": [
         "169V",
         "1BI7",
         "1CI5",
@@ -45,14 +67,25 @@ CORRESPONDENCES = {
         "10_OY6Hmiddlebig",
         "8_OY6Hsmallmiddle",
     ],
+    "run_4_1": [
+        "1DDI",
+        "0WFQ",
+        "1HVQ_big",
+        "07WM",
+        "1CFV",
+        "1HVC",
+        "12I1",
+        "OUC4",
+        "1HVQ_big_CAFs",
+    ],
     "run_4_2": [
-        "ScanRegion0",
-        "ScanRegion1",
-        "ScanRegion2",
-        "ScanRegion3",
-        "ScanRegion4",
-        "ScanRegion5",
-        "ScanRegion6",
+        "1H3R_drug",
+        "1DDI_CAFs",
+        "1H3R_2_drug",
+        "07WM_CAFs",
+        "1H3R_ctrl",
+        "1DDI",
+        "1H3R",
     ],
 }
 
@@ -201,7 +234,7 @@ def process_image(run, index):
 if __name__ == "__main__":
     # Set up command line argument parsing
     parser = argparse.ArgumentParser(description="Process CZI images and convert to OME-TIFF format")
-    parser.add_argument("--run", required=True, choices=["run_1", "run_2", "run_3", "run_4_2"], 
+    parser.add_argument("--run", required=True, choices=["run_1_1", "run_1_2", "run_2_1", "run_2_2", "run_3", "run_4_1", "run_4_2"], 
                        help="Which run to process (run_1 or run_2)")
     parser.add_argument("--index", type=int, required=True, 
                        help="Index of the image to process (0-based)")
@@ -216,4 +249,3 @@ if __name__ == "__main__":
         print(f"Successfully processed image {args.index} from {args.run}")
     except Exception as e:
         print(f"Error processing image: {e}")
-        exit(1)

@@ -200,18 +200,34 @@ def main():
     try:
         print("Reading mosaic from CZI file...")
         im = czi.read_mosaic(region=(
-            int(row['czi_xmin']), 
-            int(row['czi_ymin']),
-            int(row['czi_width']), 
-            int(row['czi_height']), 
-        ), C=0)[0]
+            int(row['czi_xmin']) + 1, 
+            int(row['czi_ymin']) + 1,
+            int(row['czi_width']) - 2, 
+            int(row['czi_height']) - 2, 
+        ), C=0, scale_factor=1.0)[0]
 
-        output_path = f"{args.output_dir}/{region_name}.ome.tiff"
+        output_path = f"{args.output_dir}/{region_name}.tiff"
         print(f"Saving OME-TIFF: {output_path}")
         print(f"Image shape: {im.shape}, dtype: {im.dtype}")
+                
+        tifffile.imwrite(output_path, im)
+        print(f"Successfully saved original: {output_path}")
+
+        print("Reading mosaic preview from CZI file...")
+        im = czi.read_mosaic(region=(
+            int(row['czi_xmin']) + 1, 
+            int(row['czi_ymin']) + 1,
+            int(row['czi_width']) - 2, 
+            int(row['czi_height']) - 2, 
+        ), C=0, scale_factor=0.2)[0]
+
+        output_path = f"{args.output_dir}/{region_name}_preview.tiff"
+        print(f"Saving OME-TIFF preview: {output_path}")
+        print(f"Preview image shape: {im.shape}, dtype: {im.dtype}")
         
         tifffile.imwrite(output_path, im)
-        print(f"Successfully saved: {output_path}")
+        print(f"Successfully saved preview: {output_path}")
+
         return 0
         
     except Exception as e:

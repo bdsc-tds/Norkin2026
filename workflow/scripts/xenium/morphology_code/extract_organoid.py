@@ -15,7 +15,7 @@ sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
 from norkin_organoid.workflow.scripts.xenium.morphology_code.get_embeddings import NorkinOrganoidDataset
 
 SCALE_FACTOR = 1 / 0.2125
-ALIGNMENTS_ROOT_PATH = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/alignments/{}_qupath_alignment_files"
+ALIGNMENTS_ROOT_PATH = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/alignments/"
 OUTPUT_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/images/"
 PREVIEW_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/image_previews/"
 FEATURES_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/features_sdata/"
@@ -27,8 +27,14 @@ def get_microscopy(patient_id):
         raise ValueError(f"Expected 1 OME-TIFF for patient '{patient_id}', found {len(matching_files)}")
     return tifffile.imread(matching_files[0])
 
-def get_transform_matrix(patient_id):
-    alignment_path = os.path.join(ALIGNMENTS_ROOT_PATH.format(patient_id), "matrix.csv")
+def get_alignment_path(patient_id, run_name):
+    alignment_path = os.path.join(ALIGNMENTS_ROOT_PATH, run_name, f"{patient_id}_qupath_alignment_files", "matrix.csv")
+    if not os.path.exists(alignment_path):
+        raise FileNotFoundError(f"Alignment matrix not found at {alignment_path}")
+    return alignment_path
+
+def get_transform_matrix(patient_id, run_name):
+    alignment_path = get_alignment_path(patient_id, run_name)
     return pd.read_csv(alignment_path, header=None).to_numpy()
 
 def get_geodf_affine_transform_matrix(matrix):
@@ -64,39 +70,6 @@ def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organo
     microscopy_cropped = microscopy[:, miny:maxy, minx:maxx]
 
     return (minx, miny, maxx, maxy), joined_df, microscopy_cropped
-
-# def extract_reoriented_optimized(large_input_image, bbox, transform_matrix, output_size=None):
-#     min_x, min_y, max_x, max_y = bbox * SCALE_FACTOR
-    
-#     corners_original = np.array([[min_x, min_y, 1], [max_x, min_y, 1], [max_x, max_y, 1], [min_x, max_y, 1]]).T
-#     corners_transformed = (transform_matrix @ corners_original).T
-#     corners_transformed = corners_transformed[:, :2] / corners_transformed[:, 2:]
-    
-#     x_min = max(0, int(np.floor(np.min(corners_transformed[:, 0]))))
-#     y_min = max(0, int(np.floor(np.min(corners_transformed[:, 1]))))
-#     x_max = min(large_input_image.shape[1], int(np.ceil(np.max(corners_transformed[:, 0]))))
-#     y_max = min(large_input_image.shape[0], int(np.ceil(np.max(corners_transformed[:, 1]))))
-
-#     if output_size is None: output_size = (x_max - x_min, y_max - y_min)
-
-#     roi = large_input_image[y_min:y_max, x_min:x_max]
-#     if roi.size == 0: return np.zeros((output_size[1], output_size[0], large_input_image.shape[2]), dtype=large_input_image.dtype)
-    
-#     map_x = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
-#     map_y = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
-    
-#     for y in range(output_size[1]):
-#         for x in range(output_size[0]):
-#             x_orig = min_x + (x / output_size[0]) * (max_x - min_x)
-#             y_orig = min_y + (y / output_size[1]) * (max_y - min_y)
-#             point_orig = np.array([x_orig, y_orig, 1])
-#             point_img = transform_matrix @ point_orig
-#             point_img = point_img[:2] / point_img[2]
-#             map_x[y, x] = point_img[0] - x_min
-#             map_y[y, x] = point_img[1] - y_min
-    
-#     reoriented = cv2.remap(roi, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-#     return reoriented
 
 def write_pyramidal_ome_tiff(array, filename):
     with tifffile.TiffWriter(filename, bigtiff=True) as tif:
@@ -183,30 +156,12 @@ def extract_lazyslide_features(
     # Convert geometry to WKT string format
     adata = wsi.fetch.features_anndata(model_type)
 
-    # # do tile filtration here on the sdata object
-    # if tissue_selection_strategy == "default":
-    #     filter_indices = adata.index
-    # elif tissue_selection_strategy == "largest":
-    #     main_tissue_id = tile_coords_hne['tissue_id'].value_counts().idxmax()
-    #     filter_indices = tile_coords_hne['tissue_id'] == main_tissue_id 
-    # elif tissue_selection_strategy == "segmentation_iou":
-    #     raise ValueError(f"Unimplemented tissue selection strategy: {tissue_selection_strategy}")
-    # else:
-    #     raise ValueError(f"Unknown tissue selection strategy: {tissue_selection_strategy}")
-
-    # tile_coords_hne_filtered = tile_coords_hne[filter_indices]
-    # tile_coords_xenium_filtered = tile_coords_xenium[filter_indices]
-    # cells_in_tile_filtered = gpd.sjoin(joined_df, tile_coords_xenium_filtered, how='inner', predicate='intersects')
-
     sdata = sd.SpatialData(
         shapes={
             "tile_coords_hne_absolute": tile_coords_hne_absolute, 
             "tile_coords_hne_relative": tile_coords_hne_relative, 
             "tile_coords_xenium_absolute": tile_coords_xenium_absolute,
             "cells_in_tile": cells_in_tile,
-            # "tile_coords_hne_filtered": tile_coords_hne_filtered, 
-            # "tile_coords_xenium_filtered": tile_coords_xenium_filtered,
-            # "cells_in_tile_filtered": cells_in_tile_filtered,
         },
         tables={"features_adata": adata},
     )
@@ -274,17 +229,15 @@ def pad_image_evenly(image, target_dim, color=(0, 0, 0)):
     
     return padded_image
 
-def main_from_args(patient_id, organoid_id, model_type):
-    print(f"Processing {organoid_id} from {patient_id}")
+def main_from_args(patient_id, organoid_id, run_name, model_type):
+    print(f"Processing {organoid_id} from {patient_id} (run: {run_name})")
     
     organoid_id_column_key = 'component_and_cluster_and_lasso'
     dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=organoid_id_column_key)
 
     microscopy = get_microscopy(patient_id)
-    transform_matrix = get_transform_matrix(patient_id)
+    transform_matrix = get_transform_matrix(patient_id, run_name)
 
-    # organoid_bbox = np.array(dataset.organoid_square_bboxes[organoid_id])
-    # histopath_bbox, transformed_df, result = extract_reoriented_optimized(np.moveaxis(microscopy, 0, 2), organoid_bbox, np.linalg.inv(transform_matrix))
     joined_df = dataset.get_organoid_df_by_id(patient_id=patient_id)
     histopath_bbox, transformed_df, result = extract_reoriented_optimized(microscopy, joined_df, np.linalg.inv(transform_matrix), organoid_id=organoid_id, organoid_id_column_key=organoid_id_column_key)
     result = pad_image_evenly(np.moveaxis(result, 0, 2), target_dim=1500, color=(210, 207, 209))
@@ -296,19 +249,19 @@ def main_from_args(patient_id, organoid_id, model_type):
     # Pass the additional parameters to extract_lazyslide_features
     sdata = extract_lazyslide_features(organoid_id, joined_df=joined_df, transform_matrix=transform_matrix, model_type=model_type, he_min_x=histopath_bbox[0], he_min_y=histopath_bbox[1])
     
-    
     return output_path, preview_path, sdata
 
 def main_from_csv(manifest_csv, index, model_type):
     manifest_df = pd.read_csv(manifest_csv)
     if index >= len(manifest_df): raise ValueError(f"Index {index} out of range")
     row = manifest_df.iloc[index]
-    main_from_args(row['patient_id'], row['organoid_id'], model_type)
+    main_from_args(row['patient_id'], row['organoid_id'], row['run_name'], model_type)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('patient_id', nargs='?')
     parser.add_argument('organoid_id', nargs='?')
+    parser.add_argument('run_name', nargs='?')
     parser.add_argument('--from-csv')
     parser.add_argument('--index', type=int)
     parser.add_argument('--model-type', type=str, default="plip")
@@ -317,8 +270,8 @@ if __name__ == "__main__":
     
     if args.from_csv and args.index is not None:
         main_from_csv(args.from_csv, args.index, args.model_type)
-    elif args.patient_id and args.organoid_id:
-        main_from_args(args.patient_id, args.organoid_id, args.model_type)
+    elif args.patient_id and args.organoid_id and args.run_name:
+        main_from_args(args.patient_id, args.organoid_id, args.run_name, args.model_type)
     else:
         parser.print_help()
         sys.exit(1)

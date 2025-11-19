@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate a CSV manifest of all organoids to process.
-Usage: python generate_organoid_manifest.py [patient1] [patient2] ...
+Usage: python generate_organoid_manifest.py patient1 patient2 ... run1 run2 ...
 """
 
 import sys
@@ -10,19 +10,17 @@ import pandas as pd
 sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
 from norkin_organoid.workflow.scripts.xenium.morphology_code.get_embeddings import NorkinOrganoidDataset
 
-# Default patients if none provided
-DEFAULT_PATIENTS = ["1CNN", "1GAA", "1GVB", "1J25", "14PT", "131N"]
 OUTPUT_CSV = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoid_manifest.csv"
 ORGANOID_ID_COLUMN_KEY = "component_and_cluster_and_lasso"
 
-def generate_manifest(patient_ids):
+def generate_manifest(patient_ids, run_names):
     """Generate CSV with all patient-organoid combinations."""
     dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, use_cached_adata=False, use_cached_masks=False, organoid_id_column_key=ORGANOID_ID_COLUMN_KEY)
     
     manifest_data = []
     
-    for patient_id in patient_ids:
-        print(f"Processing patient: {patient_id}")
+    for patient_id, run_name in zip(patient_ids, run_names):
+        print(f"Processing patient: {patient_id} (run: {run_name})")
         
         try:
             joined_df = dataset.get_organoid_df_by_id(patient_id=patient_id)
@@ -32,7 +30,8 @@ def generate_manifest(patient_ids):
                 manifest_data.append({
                     'patient_id': patient_id,
                     'organoid_id': organoid_id,
-                    'status': 'pending'
+                    'status': 'pending',
+                    'run_name': run_name
                 })
                 
             print(f"  Found {len(organoid_ids)} organoids for patient {patient_id}")
@@ -49,11 +48,19 @@ def generate_manifest(patient_ids):
     return manifest_df
 
 if __name__ == "__main__":
-    # Use provided patient IDs or defaults
+    # Expecting all patients first, then all runs
     if len(sys.argv) > 1:
-        patient_ids = sys.argv[1:]
+        all_args = sys.argv[1:]
+        mid_point = len(all_args) // 2
+        patient_ids = all_args[:mid_point]  # First half are patients
+        run_names = all_args[mid_point:]    # Second half are runs
     else:
-        patient_ids = DEFAULT_PATIENTS
+        raise ValueError("No arguments provided - should be called with patient1 patient2 ... run1 run2 ...")
+    
+    if len(patient_ids) != len(run_names):
+        raise ValueError(f"Number of patients ({len(patient_ids)}) does not match number of runs ({len(run_names)})")
         
-    print(f"Generating manifest for patients: {patient_ids}")
-    manifest = generate_manifest(patient_ids)
+    print(f"Generating manifest for {len(patient_ids)} patients")
+    print(f"Patients: {patient_ids}")
+    print(f"Runs: {run_names}")
+    manifest = generate_manifest(patient_ids, run_names)

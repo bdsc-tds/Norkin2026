@@ -5,7 +5,7 @@ PYTHON_SCRIPT="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoi
 PYTHON_PATH="/work/PRTNR/CHUV/DIR/rgottar1/spatial/conda_envs/norkin_morphology/bin/python"
 
 # Define runs array - can be pre-populated or empty
-runs=("run_3" "run_4_2")
+runs=("run_4_1")
 
 # For pre-defined runs, get their indices from CORRESPONDENCES
 echo "Using pre-defined runs, computing indices from CORRESPONDENCES..."
