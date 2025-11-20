@@ -831,14 +831,10 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 xenium_paths["raw"], anndata=False, cells_boundaries=True, pool_mode="thread", max_workers=6
             )
 
-        # add cell type annotation from raw to all correction methods
-        readwrite.read_annotations(ads, [correction_method], xenium_annot_paths, level, max_workers=8)
-
         # add 'donor_corrected' and 'sample_corrected' labels to 18samples and 8samples
-        samples2split_dict = {k[-2]: k for k in ads["raw"].keys() if k[-2] in ["18samples", "8samples"]}
-        coords_csv_dict = {
-            k: cfg["xenium_metadata_dir"] + f"Regions_coordinates_{k}.csv" for k in ["18samples", "8samples"]
-        }
+        samples2split = ["18samples", "8samples", "9_11_OY6H_middle_and_big"]
+        samples2split_dict = {k[-2]: k for k in ads["raw"].keys() if k[-2] in samples2split}
+        coords_csv_dict = {k: cfg["xenium_metadata_dir"] + f"Regions_coordinates_{k}.csv" for k in samples2split}
         readwrite.split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=plot)
 
         return ads
