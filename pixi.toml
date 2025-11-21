@@ -59,10 +59,13 @@ ipywidgets = ">=8.1.7,<9"
 anywidget = ">=0.9.18,<0.10"
 scikit-bio = ">=0.7.0,<0.8"
 squidpy = ">=1.6.5,<2"
+leidenalg = ">=0.11.0,<0.12"
 
 [feature.norkin-organoid.pypi-dependencies]
 plotly = { version = ">=6.3.1, <7", extras = ["express"] }
 pycomplexheatmap = ">=1.8.3, <2"
+liana = ">=1.6.1, <2"
+hotspotsc = ">=1.1.3, <2"
 
 
 [feature.cellcharter.system-requirements]
