@@ -853,4 +853,10 @@ def split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=True,
             ~adata.obs["sample_corrected"].isin(samples2exclude)
         )
         print("Removing", sum(~ix_keep_samples), f"cells from excluded samples of {name_sample}")
-        ads["raw"][key_sample] = adata[ix_keep_samples].copy()
+
+        if isinstance(ads["raw"][key_sample], sc.AnnData):
+            # if sdata, update table
+            ads["raw"][key_sample] = adata[ix_keep_samples].copy()
+        else: 
+            ads["raw"][key_sample].tables['table'] = adata[ix_keep_samples].copy()
+            ads["raw"][key_sample].shapes['cells_boundaries'] = ads["raw"][key_sample].shapes['cells_boundaries'][list(ix_keep_samples)].copy()

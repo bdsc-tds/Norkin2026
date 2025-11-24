@@ -16,12 +16,11 @@ PATHS = {
 
 CORRESPONDENCES = { 
     "run_1_1": [
-        "0Y6H",
+        "OY6H",
         "19II",
-        "14VS",
+        "14V5",
         "OAFN",
         "1CFW",
-        "077I_dont_use",
         "12WP",
         "OUC1",
     ],
@@ -29,7 +28,6 @@ CORRESPONDENCES = {
         "03FO",
         "OYRI",
         "1H3R",
-        "1GAA_dont_use",
         "OWMY",
         "1DCI",
         "1EGQ",
@@ -51,7 +49,7 @@ CORRESPONDENCES = {
         "1CI5",
         "1FMS",
         "12NM",
-        "OLR9",
+        "0LR9",
         "1GVB",
         "1GNS"
     ],
@@ -69,7 +67,7 @@ CORRESPONDENCES = {
     ],
     "run_4_1": [
         "1DDI",
-        "0WFQ",
+        "0WFQ_big",
         "1HVQ_big",
         "07WM",
         "1CFV",
@@ -85,7 +83,7 @@ CORRESPONDENCES = {
         "07WM_CAFs",
         "1H3R_ctrl",
         "1DDI",
-        "1H3R",
+        "1H3R_2_ctrl",
     ],
 }
 

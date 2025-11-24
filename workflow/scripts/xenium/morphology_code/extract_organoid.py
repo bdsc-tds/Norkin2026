@@ -20,21 +20,22 @@ OUTPUT_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid
 PREVIEW_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/image_previews/"
 FEATURES_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/features_sdata/"
 
-def get_microscopy(patient_id):
+def get_microscopy(run_name, sample_id):
     base_dir = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/ome_tiff_pyr"
-    matching_files = glob.glob(f"{base_dir}/r**/{patient_id}.ome.tiff")
+    glob_pth = f"{base_dir}/{run_name}/{sample_id}.ome.tiff"
+    matching_files = glob.glob(glob_pth)
     if len(matching_files) != 1:
-        raise ValueError(f"Expected 1 OME-TIFF for patient '{patient_id}', found {len(matching_files)}")
+        raise ValueError(f"Expected 1 OME-TIFF for sample '{sample_id}' from pth {glob_pth}, found {len(matching_files)}: {matching_files}")
     return tifffile.imread(matching_files[0])
 
-def get_alignment_path(patient_id, run_name):
-    alignment_path = os.path.join(ALIGNMENTS_ROOT_PATH, run_name, f"{patient_id}_qupath_alignment_files", "matrix.csv")
+def get_alignment_path(run_name, sample_id):
+    alignment_path = os.path.join(ALIGNMENTS_ROOT_PATH, run_name, f"{sample_id}_qupath_alignment_files", "matrix.csv")
     if not os.path.exists(alignment_path):
         raise FileNotFoundError(f"Alignment matrix not found at {alignment_path}")
     return alignment_path
 
-def get_transform_matrix(patient_id, run_name):
-    alignment_path = get_alignment_path(patient_id, run_name)
+def get_transform_matrix(run_name, sample_id):
+    alignment_path = get_alignment_path(run_name, sample_id)
     return pd.read_csv(alignment_path, header=None).to_numpy()
 
 def get_geodf_affine_transform_matrix(matrix):
@@ -46,7 +47,6 @@ def get_geodf_affine_transform_matrix(matrix):
         matrix[0][2],  # xoff
         matrix[1][2],  # yoff
     ]
-
 
 def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organoid_id, output_size=None, organoid_id_column_key="component_and_cluster_labels"):
     joined_df = joined_df.copy()
@@ -76,7 +76,7 @@ def write_pyramidal_ome_tiff(array, filename):
         tif.write(array, photometric='rgb' if array.shape[2] in [3, 4] else 'minisblack',
                  metadata={'axes': 'YXC'}, subfiletype=1, tile=(256, 256))
 
-def save_png_preview(result, organoid_id, root_dir=PREVIEW_DIR):
+def save_png_preview(result, sample_id, organoid_id, root_dir=PREVIEW_DIR):
     os.makedirs(root_dir, exist_ok=True)
     
     if result.dtype != np.uint8:
@@ -90,11 +90,12 @@ def save_png_preview(result, organoid_id, root_dir=PREVIEW_DIR):
         scale = max_dim / max(h, w)
         preview = cv2.resize(preview, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
     
-    preview_path = os.path.join(root_dir, f"{organoid_id}.png")
+    preview_path = os.path.join(root_dir, f"{sample_id}_{organoid_id}.png")
     cv2.imwrite(preview_path, cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
     return preview_path
 
 def extract_lazyslide_features(
+    sample_id,
     organoid_id, 
     joined_df=None, 
     organoid_bbox=None, 
@@ -116,7 +117,7 @@ def extract_lazyslide_features(
     from wsidata import open_wsi 
     
     os.makedirs(save_pth, exist_ok=True)
-    organoid_path = os.path.join(tiff_pth, f"{organoid_id}.ome.tiff")
+    organoid_path = os.path.join(tiff_pth, f"{sample_id}_{organoid_id}.ome.tiff")
     
     if not os.path.exists(organoid_path):
         raise FileNotFoundError(f"Warning: Organoid file not found: {organoid_path}")
@@ -140,7 +141,7 @@ def extract_lazyslide_features(
     zs.pl.tiles(wsi, 
             tissue_id="all", 
             linewidth=0.5)
-    plt.savefig(f"/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles/{organoid_id}.png", dpi=300)
+    plt.savefig(f"/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles/{sample_id}_{organoid_id}.png", dpi=300)
 
     zs.tl.feature_extraction(wsi, model_type, amp=True)
 
@@ -166,7 +167,7 @@ def extract_lazyslide_features(
         tables={"features_adata": adata},
     )
 
-    features_path = os.path.join(FEATURES_DIR, f"{organoid_id}_features.zarr")
+    features_path = os.path.join(FEATURES_DIR, f"{sample_id}_{organoid_id}_features.zarr")
     sdata.write(features_path, overwrite=True)
     
     print(f"Features saved: {features_path} (shape: {adata.X.shape})")
@@ -229,25 +230,47 @@ def pad_image_evenly(image, target_dim, color=(0, 0, 0)):
     
     return padded_image
 
-def main_from_args(patient_id, organoid_id, run_name, model_type):
-    print(f"Processing {organoid_id} from {patient_id} (run: {run_name})")
+def main_from_args(sample_id, organoid_id, run_name, model_type):
+    print(f"Processing {organoid_id} from {sample_id} (run: {run_name})")
     
-    organoid_id_column_key = 'component_and_cluster_and_lasso'
-    dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=organoid_id_column_key)
+    # Define error directory for failure tracking
+    ERROR_DIR = "/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/err"  # Replace with your actual fixed folder path
+    
+    try:
+        organoid_id_column_key = 'component_and_cluster_and_lasso'
+        dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=organoid_id_column_key)
 
-    microscopy = get_microscopy(patient_id)
-    transform_matrix = get_transform_matrix(patient_id, run_name)
+        microscopy = get_microscopy(run_name, sample_id)
+        transform_matrix = get_transform_matrix(run_name, sample_id)
 
-    joined_df = dataset.get_organoid_df_by_id(patient_id=patient_id)
-    histopath_bbox, transformed_df, result = extract_reoriented_optimized(microscopy, joined_df, np.linalg.inv(transform_matrix), organoid_id=organoid_id, organoid_id_column_key=organoid_id_column_key)
-    result = pad_image_evenly(np.moveaxis(result, 0, 2), target_dim=1500, color=(210, 207, 209))
+        joined_df = dataset.get_organoid_df_by_id(run_name=run_name, sample_id=sample_id)
+        histopath_bbox, transformed_df, result = extract_reoriented_optimized(microscopy, joined_df, np.linalg.inv(transform_matrix), organoid_id=organoid_id, organoid_id_column_key=organoid_id_column_key)
+        result = pad_image_evenly(np.moveaxis(result, 0, 2), target_dim=1500, color=(210, 207, 209))
 
-    output_path = os.path.join(OUTPUT_DIR, f"{organoid_id}.ome.tiff")
-    write_pyramidal_ome_tiff(result, output_path)
-    preview_path = save_png_preview(result, organoid_id)
+        output_path = os.path.join(OUTPUT_DIR, f"{sample_id}_{organoid_id}.ome.tiff")
+        write_pyramidal_ome_tiff(result, output_path)
+        preview_path = save_png_preview(result, sample_id, organoid_id)
+    
+    except Exception as e:
+        # Create error directory if it doesn't exist
+        os.makedirs(ERROR_DIR, exist_ok=True)
+        
+        # Create file with sample_id and organoid_id in the name, containing just the exception
+        error_filename = f"error_{sample_id}_{organoid_id}.txt"
+        error_filepath = os.path.join(ERROR_DIR, error_filename)
+        
+        # Write just the exception to file
+        with open(error_filepath, 'w') as f:
+            f.write(str(e))
+        
+        print(f"Error processing {organoid_id} from {sample_id}: {str(e)}")
+        print(f"Error details written to: {error_filepath}")
+        
+        # Re-raise the exception to maintain original error behavior
+        raise
 
     # Pass the additional parameters to extract_lazyslide_features
-    sdata = extract_lazyslide_features(organoid_id, joined_df=joined_df, transform_matrix=transform_matrix, model_type=model_type, he_min_x=histopath_bbox[0], he_min_y=histopath_bbox[1])
+    sdata = extract_lazyslide_features(sample_id, organoid_id, joined_df=joined_df, transform_matrix=transform_matrix, model_type=model_type, he_min_x=histopath_bbox[0], he_min_y=histopath_bbox[1])
     
     return output_path, preview_path, sdata
 
@@ -255,11 +278,11 @@ def main_from_csv(manifest_csv, index, model_type):
     manifest_df = pd.read_csv(manifest_csv)
     if index >= len(manifest_df): raise ValueError(f"Index {index} out of range")
     row = manifest_df.iloc[index]
-    main_from_args(row['patient_id'], row['organoid_id'], row['run_name'], model_type)
+    main_from_args(row['sample_id'], row['organoid_id'], row['run_name'], model_type)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('patient_id', nargs='?')
+    parser.add_argument('sample_id', nargs='?')
     parser.add_argument('organoid_id', nargs='?')
     parser.add_argument('run_name', nargs='?')
     parser.add_argument('--from-csv')
@@ -270,8 +293,8 @@ if __name__ == "__main__":
     
     if args.from_csv and args.index is not None:
         main_from_csv(args.from_csv, args.index, args.model_type)
-    elif args.patient_id and args.organoid_id and args.run_name:
-        main_from_args(args.patient_id, args.organoid_id, args.run_name, args.model_type)
+    elif args.sample_id and args.organoid_id and args.run_name:
+        main_from_args(args.sample_id, args.organoid_id, args.run_name, args.model_type)
     else:
         parser.print_help()
         sys.exit(1)

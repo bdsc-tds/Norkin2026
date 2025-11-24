@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
+import sys
 import torch
 
 from matplotlib.collections import PatchCollection, PolyCollection
@@ -755,34 +756,45 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             self._process_raw_data_from_sdata(adata_save_pth=adata_save_pth, use_cached_adata=use_cached_adata)
             self._save_masks()
 
-    def get_organoid_df_by_id(self, patient_id=None, joint_id=None):
+    def get_organoid_df_by_id(self, run_name=None, sample_id=None, joint_id=None):
         """
-        Retrieve the organoid dataframe corresponding to a specific patient ID or joint ID.
-        Either patient_id or joint_id must be provided, but not both.
+        Retrieve the organoid dataframe corresponding to a specific sample ID or joint ID.
+        Either sample_id or joint_id must be provided, but not both.
         Args:
-            patient_id (str, optional): The patient ID to search for.
-            joint_id (str, optional): The joint ID to search for. Format includes the acquistion type (dapi/mm) and the patient id.
+            sample_id (str, optional): The sample ID to search for.
+            joint_id (str, optional): The joint ID to search for. Format includes the acquistion type (dapi/mm) and the sample id.
         Returns:
             pd.DataFrame: The organoid dataframe corresponding to the provided ID.
         """
-        if patient_id is None and joint_id is None:
+        if sample_id is None and joint_id is None:
             raise Exception("patient ID must be a part of joint id.")
-        if patient_id is not None and joint_id is not None:
-            raise Exception("only patient id or joint id must be provided.")
-        if patient_id is not None:
-            id = patient_id
+        if sample_id is not None and joint_id is not None:
+            raise Exception("only sample id or joint id must be provided.")
+        if sample_id is not None:
+            id_ = sample_id
         if joint_id is not None:
-            id = joint_id
+            id_ = joint_id
+
+        #TODO: fix this by integrating into organoid_dfs
+        complete_keys = []
+        dfs = []
 
         for proseg_id_tuple, joined_df in self.organoid_dfs.items():
+            sample_id = joined_df['sample_id'].unique()[0]
+            run_id = joined_df['run_id'].unique()[0]
             complete_key = "_".join(proseg_id_tuple)
-            if id in complete_key:
-                return joined_df
+            if sample_id == id_ and run_id == run_name:
+                complete_keys.append(sample_id)
+                dfs.append(joined_df)
 
-        raise Exception(f"no element with id {id} found.")
+        if len(dfs) > 1:
+            raise Exception(f"multiple elements with id {id_} and run id {run_name} found: {complete_keys}")
+        if len(dfs) == 0:
+            raise Exception(f"no element with id {id_} and run id {run_name} found.")
+
+        return dfs[0]
 
     def _get_spatial_anndatas(
-        self,
         correction_method="raw",
         segmentation="proseg_expected",
         condition=["CRC_PDO", "CRC_PDO_CAF", "CRC_PDO_DEV"],
@@ -845,61 +857,98 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         return ads
 
     def _process_raw_data_from_sdata(self, adata_save_pth, use_cached_adata):
-        organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path)
-        # import pdb; pdb.set_trace()
-        organoid_cell_mapping = organoid_cell_mapping[[self.organoid_id_column_key]]
+        organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path).reset_index()
+        organoid_cell_mapping = organoid_cell_mapping[["full_id", self.organoid_id_column_key]]
 
         print("Loading anndata...")
         os.makedirs(os.path.dirname(adata_save_pth), exist_ok=True)
 
         if not os.path.exists(adata_save_pth) or not use_cached_adata:
-            ads = self._get_spatial_anndatas()
-            joblib.dump(ads, adata_save_pth)
+            ads = NorkinOrganoidDataset._get_spatial_anndatas()
         else:
             ads = joblib.load(adata_save_pth)
+        joblib.dump(ads, adata_save_pth)
         print("Loaded anndata.")
 
         max_pixel_side_length = -np.inf
         dfs = {}
 
+        def get_run_id(proseg_key, metasample_id):
+            if metasample_id == "8samples":
+                return "run_4_2"
+            if metasample_id == "18samples":
+                return "run_4_1"
+            
+            sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
+            from norkin_organoid.workflow.scripts.xenium.morphology_code.czi_to_ome import CORRESPONDENCES
+            for run, sample_ids in CORRESPONDENCES.items():
+                if metasample_id in sample_ids:
+                    return run
+                if metasample_id == "9_11_OY6H_middle_and_big":
+                    return "run_3"
+            
+            raise Exception(f"Run not found for metasample id {metasample_id}")
+
+
         for proseg_key in tqdm(ads["raw"].keys(), desc="Processing geo_df samples..."):
-            method = proseg_key[2]
-            patient_id = proseg_key[3]
-            joint_id = f"{method}__{patient_id}"
+            try:
+                method = proseg_key[2]
+                metasample_id = proseg_key[3]
+                run = get_run_id(proseg_key, metasample_id)
 
-            proseg_key_str = "_".join(proseg_key) + "_proseg"
-            geo_df = ads["raw"][proseg_key].shapes["cells_boundaries"]
-            geo_df["full_cell_id"] = geo_df["cell_id"].apply(lambda x: f"{proseg_key_str}-{x}")
-            geo_df["patient_id"] = patient_id
-            geo_df["method"] = method
-            geo_df["joint_id"] = joint_id
+                if metasample_id == "9_11_OY6H_middle_and_big":
+                    continue
 
-            # columns: foll_cell_id, Cell_ID, Organoid_ID, patient_id, method, geometry
-            joined_df = geo_df.merge(organoid_cell_mapping, left_on="full_cell_id", right_on="full_id", how="inner")
+                sdata = ads["raw"][proseg_key]
+                adata = sdata.tables['table']
 
-            # Get organoid IDs with at least 20 cells
-            # to be clear, "component_and_cluster_labels" is organoid id... don't ask why :P
-            organoid_counts = joined_df[self.organoid_id_column_key].value_counts()
-            valid_organoids = organoid_counts[organoid_counts >= self.organoid_count_threshold].index
+                sample_ids = adata.obs['sample_corrected'].unique().tolist() if metasample_id in ["8samples", "18samples", "9_11_OY6H_middle_and_big"] else [metasample_id]
+                #todo: add sample id here. 
+                for sample_id in sample_ids:
+                    joint_id = f"{method}__{sample_id}"
+                    proseg_key_str = "_".join(proseg_key) + "_proseg"
+                    geo_df = sdata.shapes["cells_boundaries"]
+                    geo_df["full_cell_id"] = geo_df["cell_id"].apply(lambda x: f"{proseg_key_str}-{x}")
+                    geo_df["patient_id"] = metasample_id
+                    geo_df["method"] = method
+                    geo_df["run_id"] = run
+                    geo_df["joint_id"] = joint_id
+                    
+                    if metasample_id in ["8samples", "18samples", "9_11_OY6H_middle_and_big"]:
+                        geo_df['sample_id'] = list(adata.obs['sample_corrected'])
+                    else:
+                        geo_df['sample_id'] = metasample_id
 
-            # Filter the DataFrame
-            joined_df = joined_df[joined_df[self.organoid_id_column_key].isin(valid_organoids)]
-            joined_df = joined_df[joined_df[self.organoid_id_column_key] != 0]
+                    # columns: foll_cell_id, Cell_ID, Organoid_ID, patient_id, method, geometry
+                    geo_df_for_sample = geo_df[geo_df['sample_id'] == sample_id]
+                    joined_df = geo_df_for_sample.merge(organoid_cell_mapping, left_on="full_cell_id", right_on="full_id", how="inner")
 
-            for organoid_id, group in joined_df.groupby(self.organoid_id_column_key):
-                # Get bounding box
-                coords = group.total_bounds
+                    # Get organoid IDs with at least 20 cells
+                    # to be clear, "component_and_cluster_labels" is organoid id... don't ask why :P
+                    organoid_counts = joined_df[self.organoid_id_column_key].value_counts()
+                    valid_organoids = organoid_counts[organoid_counts >= self.organoid_count_threshold].index
 
-                # Update max pixel side length for standardization
-                def dims(coords):
-                    return (coords[2] - coords[0], coords[3] - coords[1])
+                    # Filter the DataFrame
+                    joined_df = joined_df[joined_df[self.organoid_id_column_key].isin(valid_organoids)]
+                    joined_df = joined_df[joined_df[self.organoid_id_column_key] != 0]
 
-                max_pixel_side_length = max([dims(coords)[0], dims(coords)[1], max_pixel_side_length])
+                    for organoid_id, group in joined_df.groupby(self.organoid_id_column_key):
+                        # Get bounding box
+                        coords = group.total_bounds
 
-            dfs[proseg_key] = {"joined_df": joined_df, "max_pixel_side_length": max_pixel_side_length}
+                        # Update max pixel side length for standardization
+                        def dims(coords):
+                            return (coords[2] - coords[0], coords[3] - coords[1])
 
-            self.organoid_dfs[proseg_key] = joined_df
-            print(f"Max pixel side length across all organoids: {max_pixel_side_length}")
+                        max_pixel_side_length = max([dims(coords)[0], dims(coords)[1], max_pixel_side_length])
+
+                    dfs[(*proseg_key, sample_id)] = {"joined_df": joined_df, "max_pixel_side_length": max_pixel_side_length}
+
+                    self.organoid_dfs[(*proseg_key, sample_id)] = joined_df
+                    print(f"Max pixel side length across all organoids: {max_pixel_side_length}")
+            except Exception as e:
+                import pdb; pdb.set_trace()
+                c=2
 
         max_pixel_side_length = max([obj["max_pixel_side_length"] for obj in dfs.values()])
         for joined_df_obj in tqdm(dfs.values(), desc="Generating organoid masks..."):
