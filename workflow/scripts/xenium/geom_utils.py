@@ -129,6 +129,7 @@ def classify_polygons_by_boundary_layers(
     use_xy_only: bool = False,
     ignore_holes: bool = False,
     boundary_buffer: float = 0.0,
+    return_distance_to_boundary: bool = False,
 ):
     gdf = gdf.copy()
     gdf["location"] = "interior"
@@ -153,12 +154,12 @@ def classify_polygons_by_boundary_layers(
         )
 
     # classify
-    for cid, cluster_gdf in tqdm(clusters, total=total_clusters, desc="Processing clusters"):
+    for cid, cluster_gdf in tqdm(clusters, total=total_clusters, desc="Classifying clusters into layers from boundary"):
         boundary = boundaries[cid]
         if boundary is None:
             continue
 
-        # --- boundary_0 detection ---
+        # boundary_0 detection
         cand_idx = sindex.query(boundary, predicate="intersects")
         cands = gdf.iloc[cand_idx]
         cands = cands[cands[cluster_col] == cid]
@@ -191,6 +192,15 @@ def classify_polygons_by_boundary_layers(
             gdf.loc[new, "location"] = f"boundary_{layer}"
             visited.update(new)
             frontier = new
+
+    if return_distance_to_boundary:
+        gdf["distance_to_boundary"] = float("nan")
+
+        # Group by cluster and assign distances directly using .loc
+        for cid, group in tqdm(clusters, total=total_clusters, desc="Calculating distances to boundary"):
+            boundary = boundaries.get(cid)
+            if boundary and not boundary.is_empty:
+                gdf.loc[group.index, "distance_to_boundary"] = group.geometry.distance(boundary)
 
     return gdf, boundaries, dissolved, statuses
 

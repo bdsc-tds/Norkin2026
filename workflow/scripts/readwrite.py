@@ -19,9 +19,6 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from tqdm import tqdm
 from types import MappingProxyType
 from spatialdata.models import (
-    # Image2DModel,
-    # Labels2DModel,
-    # Labels3DModel,
     ShapesModel,
     PointsModel,
 )
@@ -764,7 +761,9 @@ def read_annotations(
                 print(f"Raw annotations missing for {k} when processing {correction_method}")
 
 
-def split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=True, figsize=(10, 10)):
+def split_samples_by_coords(
+    ads, samples2split_dict, coords_csv_dict, correction_method="raw", plot=True, figsize=(10, 10)
+):
     """
     This function takes a dict of AnnData or SpatialData objects, along with a mapping
     of sample names to be split and corresponding coordinate from CSV files. For each specified
@@ -799,11 +798,13 @@ def split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=True,
 
     for name_sample, key_sample in samples2split_dict.items():
         print(name_sample)
-        adata = ads["raw"][key_sample]
 
         # Check if dict contains spatialdata or anndata
-        if not isinstance(adata, sc.AnnData):
-            adata = adata["table"]  # if sdata, extract table
+        is_adata = isinstance(ads[correction_method][key_sample], sc.AnnData)
+        if not is_adata:
+            adata = ads[correction_method][key_sample]["table"].copy()  # if sdata, extract table
+        else:
+            adata = ads[correction_method][key_sample].copy()
 
         sx, sy = adata.obsm["spatial"].T
 
@@ -853,4 +854,12 @@ def split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=True,
             ~adata.obs["sample_corrected"].isin(samples2exclude)
         )
         print("Removing", sum(~ix_keep_samples), f"cells from excluded samples of {name_sample}")
-        ads["raw"][key_sample] = adata[ix_keep_samples].copy()
+
+        if is_adata:
+            ads[correction_method][key_sample] = adata[ix_keep_samples].copy()
+        else:
+            # if sdata, update table
+            ads[correction_method][key_sample]["table"] = adata[ix_keep_samples].copy()
+            ads[correction_method][key_sample]["cells_boundaries"] = ads[correction_method][key_sample][
+                "cells_boundaries"
+            ][list(ix_keep_samples)].copy()
