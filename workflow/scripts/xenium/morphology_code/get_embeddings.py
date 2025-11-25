@@ -1046,6 +1046,7 @@ def get_morphological_features(masks):
             "median_distance_to_edge": 0,
             "num_holes": 0,
             "num_holes_topological": 0,
+            "interior_holes_to_object_area_percentage": 0,
             "interior_holes_percentage": 0,
         }
 
