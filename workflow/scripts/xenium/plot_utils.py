@@ -784,6 +784,8 @@ def joint_clustermap(
 
     plt.show()
 
+    return g, sample_linkage, final_df
+
 
 def dot_clustermap(
     data,
