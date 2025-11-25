@@ -1087,14 +1087,11 @@ def get_morphological_features(masks):
             labeled_holes_topological = label(interior_holes_mask)
             num_holes_topological = np.max(labeled_holes_topological)
 
-            # Interior holes are the difference between filled mask and original mask
-            interior_holes = filled_mask & ~combined_mask
-            interior_holes_count = np.sum(interior_holes)
-            total_object_pixels = np.sum(filled_mask)
+            # Interior holes with respect to the object area mask and original mask
             interior_holes_count = np.sum(interior_holes_mask)
             total_object_pixels = np.sum(combined_mask)
 
-            # THE FIX for percentage: Use the correct denominator.
+            # Interior holes are the difference between filled mask and original mask
             hole_area = np.sum(interior_holes_mask)
             filled_area = np.sum(filled_mask)
             interior_holes_percentage = (100 * hole_area / filled_area) if filled_area > 0 else 0
