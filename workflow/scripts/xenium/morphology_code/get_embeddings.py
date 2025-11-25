@@ -1088,7 +1088,7 @@ def get_morphological_features(masks):
             # Interior holes are the difference between filled mask and original mask
             interior_holes = filled_mask & ~combined_mask
             interior_holes_count = np.sum(interior_holes)
-            total_object_pixels = np.sum(combined_mask)
+            total_object_pixels = np.sum(filled_mask)
 
             # Calculate percentage of interior holes relative to total object area
             if total_object_pixels > 0:
