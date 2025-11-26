@@ -1115,3 +1115,63 @@ def subsample(adata, obs_key, n_obs, random_state=0, copy=True):
         return adata[indices].copy()
     else:
         return adata[indices]
+
+
+def get_gene_stats(adata, groupby=None, layer=None):
+    """
+    Compute mean expression and percentage of cells expressing each gene.
+    Optionally computes this per group (e.g., 'cluster').
+
+    Returns:
+        DataFrame: Long-format dataframe with columns ['gene', 'mean', 'pct', 'group']
+    """
+
+    def _calc_stats(X):
+        # 1. Compute Mean
+        mu = X.mean(axis=0)
+
+        if isinstance(mu, np.matrix):
+            mu = mu.A1
+        else:
+            mu = mu.flatten()
+
+        # 2. Compute Percent Expressing
+        if scipy.sparse.issparse(X):
+            pct = (X.getnnz(axis=0) / X.shape[0]) * 100
+        else:
+            pct = (X > 0).mean(axis=0) * 100
+
+        return mu, pct
+
+    X = adata.layers[layer] if layer is not None else adata.X
+
+    # Case 1: Global stats (no grouping)
+    if groupby is None:
+        mu, pct = _calc_stats(X)
+        df = pd.DataFrame({"gene": adata.var_names, "mean_expression": mu, "pct_expressing": pct}).set_index("gene")
+        return df
+
+    # Case 2: Stats per group
+    else:
+        results = []
+        # Get unique categories (ignoring NaNs)
+        groups = adata.obs[groupby].dropna().unique()
+
+        for group in groups:
+            # Subset the data
+            X_subset = X[adata.obs[groupby] == group]
+            mu, pct = _calc_stats(X_subset)
+
+            # Create temporary DF for this group
+            temp_df = pd.DataFrame(
+                {
+                    "gene": adata.var_names,
+                    "mean_expression": mu,
+                    "pct_expressing": pct,
+                    "group": group,  # Add group label
+                }
+            )
+            results.append(temp_df)
+
+        # Combine all groups into one long dataframe
+        return pd.concat(results, axis=0).reset_index(drop=True)

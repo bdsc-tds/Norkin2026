@@ -110,7 +110,9 @@ def get_outer_boundary(geom, ignore_holes=True, boundary_buffer=0.0):
 
         except Exception as e:
             status = 2
-            print(f"Warning: Robust boundary extraction failed with error: {e}. Falling back to union of exteriors.")
+            print(
+                f"Warning: status 2 - Robust boundary extraction failed with error: {e}. Falling back to union of exteriors."
+            )
             if hasattr(geom, "geoms"):  # MultiPolygon
                 boundary = unary_union([Polygon(p.exterior) for p in geom.geoms]).boundary
                 return boundary, status
@@ -131,6 +133,7 @@ def classify_polygons_by_boundary_layers(
     boundary_buffer: float = 0.0,
     return_distance_to_boundary: bool = False,
 ):
+
     gdf = gdf.copy()
     gdf["location"] = "interior"
     gdf["geometry"] = gdf["geometry"].make_valid()
