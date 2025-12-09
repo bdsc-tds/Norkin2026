@@ -266,7 +266,7 @@ def find_neighbor_same_donor(
 
         # Skip if donor is not present in both conditions
         if not np.any(source_mask) or not np.any(target_mask):
-            print("\tDonor not found in both conditions")
+            print(f"\t{donor} not found in both conditions")
             continue
 
         # Get data and integer positions using the masks

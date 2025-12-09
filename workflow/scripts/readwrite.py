@@ -582,7 +582,8 @@ def read_xenium_samples(
             except Exception as e:
                 print(f"Error processing {e}")
 
-    return sdatas
+    sdatas_ordered = dict(sorted(sdatas.items()))
+    return sdatas_ordered
 
 
 def get_gene_panel_info(path):

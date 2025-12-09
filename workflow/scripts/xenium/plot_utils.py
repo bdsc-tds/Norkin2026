@@ -10,12 +10,11 @@ import anndata as ad
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Patch
-from scipy.cluster.hierarchy import linkage
+from scipy.cluster.hierarchy import linkage, cut_tree, leaves_list, optimal_leaf_ordering
 from scipy.spatial.distance import pdist
 from scipy.stats import spearmanr, rankdata
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.metrics import pairwise_distances
-
 import matplotlib.patches as mpatches
 import matplotlib.colors as mcolors
 from sklearn.cluster import KMeans
@@ -32,13 +31,17 @@ def prepare_clustered_data(
     df_comp,
     annotations,
     n_clusters=10,
+    n_micro_clusters=1000,
     exclude_all_malignant=True,
-    malignant_column="Epi",
+    malignant_columns=["malignant cell"],
     cmaps={},
-    order_by="centroid",
+    # order_by="centroid",
+    metric="cosine",
+    method="complete",
+    force_positive=False,
 ):
     """
-    Performs KMeans clustering and orders the data for consistent plotting.
+    Performs clustering and orders the data for consistent plotting.
 
     Args:
         df_comp (pd.DataFrame): The data to cluster and plot.
@@ -46,9 +49,8 @@ def prepare_clustered_data(
                                  and values are pandas Series of the annotations.
         n_clusters (int): The number of clusters for KMeans.
         exclude_all_malignant (bool): Whether to filter out rows with 100% or 0% malignant cells.
-        malignant_column (str): The name of the column representing malignant cells.
+        malignant_columns (list[str]): The name(s) of the column(s) representing malignant cells.
         cmaps (dict): A dictionary where keys are annotation names and values are matplotlib colormaps names.
-        order_by (str): order cluster centroids only or order all points
 
     Returns:
         tuple: A tuple containing:
@@ -57,59 +59,129 @@ def prepare_clustered_data(
                                               annotation is always the last element.
             - palettes (dict): A dict of color palettes corresponding to the annotations.
     """
+    df_comp = df_comp.copy()
+
     # Exclude all malignant if specified
-    if exclude_all_malignant and malignant_column in df_comp.columns:
-        idx_malignant = np.where(df_comp.columns == malignant_column)[0]
-        idx_some_malignant = (
-            (df_comp.iloc[:, idx_malignant] < 1) & (df_comp.iloc[:, idx_malignant] > 0)
-        ).values.flatten()
+    if exclude_all_malignant:
+        cols = df_comp.columns[df_comp.columns.isin(malignant_columns)]
+        sum_props = df_comp[cols].sum(axis=1)
+        idx_some_malignant = ((sum_props < 1) & (sum_props > 0)).values.flatten()
         df_comp = df_comp.loc[idx_some_malignant]
         df_comp.index = np.arange(df_comp.shape[0])
         for key in annotations:
             annotations[key] = annotations[key].loc[idx_some_malignant]
             annotations[key].index = np.arange(annotations[key].shape[0])
 
-    # Run KMeans
-    kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(df_comp)
-    clusters = kmeans.labels_
+    df_comp.reset_index(drop=True, inplace=True)
 
-    # Order clusters by centroid positions
-    centroids = kmeans.cluster_centers_
-    pc = PCA(n_components=1).fit(centroids)
-    cluster_order = np.argsort(pc.transform(centroids).ravel())
+    # # Run KMeans
+    # kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(df_comp)
+    # clusters = kmeans.labels_
 
-    if order_by != "centroid":
-        all_points_projection = pc.transform(df_comp)
+    # # Order clusters by centroid positions
+    # centroids = kmeans.cluster_centers_
+    # pc = PCA(n_components=1).fit(centroids)
+    # cluster_order = np.argsort(pc.transform(centroids).ravel())
 
-        # This links each original index to its cluster and its projection score.
-        sorting_df = pd.DataFrame(
-            {"cluster": clusters, "projection": all_points_projection.ravel()}, index=df_comp.index
-        )
+    # if order_by != "centroid":
+    #     all_points_projection = pc.transform(df_comp)
 
-        # 4. Enforce the desired cluster order by converting to a categorical type
-        #    This is crucial for the primary sort level.
-        sorting_df["cluster"] = pd.Categorical(sorting_df["cluster"], categories=cluster_order, ordered=True)
+    #     # This links each original index to its cluster and its projection score.
+    #     sorting_df = pd.DataFrame(
+    #         {"cluster": clusters, "projection": all_points_projection.ravel()}, index=df_comp.index
+    #     )
 
-        # 5. Perform a stable, two-level sort:
-        #    - Level 1: Sort by the ordered cluster category.
-        #    - Level 2: Sort by the projection score within each cluster.
-        sorted_df = sorting_df.sort_values(by=["cluster", "projection"])
+    #     # 4. Enforce the desired cluster order by converting to a categorical type
+    #     #    This is crucial for the primary sort level.
+    #     sorting_df["cluster"] = pd.Categorical(sorting_df["cluster"], categories=cluster_order, ordered=True)
 
-        # 6. The final ordered_indices is the index of this sorted DataFrame
-        ordered_indices = sorted_df.index.tolist()
+    #     # 5. Perform a stable, two-level sort:
+    #     #    - Level 1: Sort by the ordered cluster category.
+    #     #    - Level 2: Sort by the projection score within each cluster.
+    #     sorted_df = sorting_df.sort_values(by=["cluster", "projection"])
 
-    else:
-        # Create ordered index
-        ordered_indices = []
-        for c in cluster_order:
-            ordered_indices.extend(np.where(clusters == c)[0])
+    #     # 6. The final ordered_indices is the index of this sorted DataFrame
+    #     ordered_indices = sorted_df.index.tolist()
 
-    df_comp_ordered = df_comp.iloc[ordered_indices]
+    # else:
+    #     # Create ordered index
+    #     ordered_indices = []
+    #     for c in cluster_order:
+    #         ordered_indices.extend(np.where(clusters == c)[0])
+
+    # df_comp_ordered = df_comp.iloc[ordered_indices]
+
+    # annotations_ordered["Cluster"] = clusters_ordered
+    # for k, anno in annotations.items():
+    #     annotations_ordered[k] = anno.iloc[ordered_indices]
+    # clusters_ordered = pd.Series(clusters[ordered_indices], index=df_comp_ordered.index, name="Cluster")
 
     # Order annotations
     annotations_ordered = {}
 
-    clusters_ordered = pd.Series(clusters[ordered_indices], index=df_comp_ordered.index, name="Cluster")
+    # --- 2. Micro-Clustering (High-Speed Quantization) ---
+    mbk = KMeans(n_clusters=n_micro_clusters).fit(df_comp)
+
+    micro_labels = mbk.labels_  # Shape: (n_samples,)
+    micro_centroids = mbk.cluster_centers_  # Shape: (curr_n_micro, n_features)
+    if force_positive:
+        micro_centroids = np.abs(micro_centroids)
+        micro_centroids = micro_centroids / micro_centroids.sum(axis=1)[:, None]
+
+    # --- 3. Hierarchical Clustering on Centroids ---
+    Z = linkage(micro_centroids, method=method, metric=metric)
+
+    # Optimize leaf ordering (flip branches to maximize similarity between adjacent leaves)
+    try:
+        Z = optimal_leaf_ordering(Z, micro_centroids)
+    except Exception:
+        pass  # Fallback if recursion depth exceeded on massive trees (rare for k=1000)
+
+    # Get the linear order of micro-clusters from the dendrogram
+    micro_order_indices = leaves_list(Z)
+
+    # Create a rank map: micro_cluster_id -> order_rank (0 to n_micro-1)
+    micro_rank_map = {cid: rank for rank, cid in enumerate(micro_order_indices)}
+
+    # --- 4. Macro-Clustering (The 'Cut') ---
+    # We cut the dendrogram to get exactly n_clusters (e.g., 10)
+    macro_labels_per_micro = cut_tree(Z, n_clusters=n_clusters).flatten()
+
+    # Map every original point to its Macro Cluster
+    # macro_labels_per_micro is indexed by micro_cluster_id
+    final_macro_labels = macro_labels_per_micro[micro_labels]
+
+    # --- 5. Sorting the Data ---
+    # We need a stable sort keys:
+    # Key 1: Micro Cluster Rank (from Dendrogram) - ensures global gradient
+    # Key 2: PCA Projection - ensures smoothness within the micro-cluster dots
+
+    # Calculate global PCA for local smoothing
+    projection = PCA(n_components=1).fit_transform(df_comp).flatten()
+
+    sorting_df = pd.DataFrame({"micro_id": micro_labels, "projection": projection}, index=df_comp.index)
+
+    # Map the rank
+    sorting_df["micro_rank"] = sorting_df["micro_id"].map(micro_rank_map)
+
+    # Sort
+    sorted_df = sorting_df.sort_values(by=["micro_rank", "projection"])
+    ordered_indices = sorted_df.index.tolist()
+
+    # Apply ordering to Data
+    df_comp_ordered = df_comp.iloc[ordered_indices]
+
+    # --- 6. Handle Outputs & Palette ---
+
+    # Get the ordered macro labels
+    clusters_ordered = pd.Series(final_macro_labels[ordered_indices], index=df_comp_ordered.index, name="Cluster")
+
+    # Determine the "Cluster Order" list
+    # Since we sorted by dendrogram, the macro clusters appear in blocks.
+    cluster_order = clusters_ordered.unique().tolist()
+
+    # Organize Annotations
+    annotations_ordered = {}
     annotations_ordered["Cluster"] = clusters_ordered
     for k, anno in annotations.items():
         annotations_ordered[k] = anno.iloc[ordered_indices]
@@ -274,7 +346,7 @@ def stackplot(
         stack = ax.stackplot(df_group.columns, *df_group.values, labels=df_group.index, colors=colors)
 
         # Store the original top limit of the stackplot
-        _, top_limit = ax.get_ylim()
+        # _, top_limit = ax.get_ylim()
 
         ax.set_title(group)
 
@@ -301,7 +373,7 @@ def stackplot(
         bottom_limit = -bar_height * num_annotations
 
         # (FIX 3) Set both top and bottom limits explicitly
-        ax.set_ylim(bottom=bottom_limit, top=top_limit)
+        ax.set_ylim(bottom=bottom_limit, top=1)
 
         ax.set_xticks([])  # Ensure x-ticks are off
 
@@ -317,7 +389,7 @@ def stackplot(
         [lab.get_label() for lab in stack],
         title="Cell Type",
         loc="center right",
-        bbox_to_anchor=(0.95, 0.5),
+        bbox_to_anchor=(0.98, 0.5),
         frameon=False,
     )
 
