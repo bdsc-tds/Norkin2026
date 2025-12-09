@@ -3,6 +3,7 @@ bftools/*
 data/*
 results/*
 figures/*
+workflow/scratch/
 !data/.gitkeep
 !results/.gitkeep
 !figures/.gitkeep
