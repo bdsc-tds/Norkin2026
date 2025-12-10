@@ -50,8 +50,8 @@ def get_geodf_affine_transform_matrix(matrix):
 
 def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organoid_id, output_size=None, organoid_id_column_key="component_and_cluster_labels"):
     joined_df = joined_df.copy()
-    joined_df_sample = joined_df[joined_df[organoid_id_column_key] == organoid_id]
-    joined_df_sample['geometry'] = joined_df_sample['geometry'].scale(xfact=SCALE_FACTOR, yfact=SCALE_FACTOR, origin=(0,0))
+    joined_df_organoid = joined_df[joined_df[organoid_id_column_key] == organoid_id]
+    joined_df_organoid['geometry'] = joined_df_organoid['geometry'].scale(xfact=SCALE_FACTOR, yfact=SCALE_FACTOR, origin=(0,0))
 
     organoid_to_histopath_matrix_geodf = [
         transform_matrix[0][0],
@@ -62,14 +62,15 @@ def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organo
         transform_matrix[1][2],
     ]
 
-    joined_df_sample['geometry'] = joined_df_sample['geometry'].affine_transform(organoid_to_histopath_matrix_geodf)
-    joined_df_sample['geometry'] = joined_df_sample['geometry'].buffer(distance=100)
+    joined_df_organoid['geometry'] = joined_df_organoid['geometry'].affine_transform(organoid_to_histopath_matrix_geodf)
+    joined_df_organoid['geometry'] = joined_df_organoid['geometry'].buffer(distance=100)
+    import pdb; pdb.set_trace()
     
-    histo_bounds = joined_df_sample.total_bounds
+    histo_bounds = joined_df_organoid.total_bounds
     minx, miny, maxx, maxy = [int(coord) for coord in histo_bounds]
     microscopy_cropped = microscopy[:, miny:maxy, minx:maxx]
 
-    return (minx, miny, maxx, maxy), joined_df, microscopy_cropped
+    return (minx, miny, maxx, maxy), joined_df_organoid, microscopy_cropped
 
 def write_pyramidal_ome_tiff(array, filename):
     with tifffile.TiffWriter(filename, bigtiff=True) as tif:

@@ -878,14 +878,14 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 return "run_4_2"
             if metasample_id == "18samples":
                 return "run_4_1"
+            if metasample_id == "9_11_OY6H_middle_and_big":
+                return "run_3"
             
             sys.path.append("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1")
             from norkin_organoid.workflow.scripts.xenium.morphology_code.czi_to_ome import CORRESPONDENCES
             for run, sample_ids in CORRESPONDENCES.items():
                 if metasample_id in sample_ids:
                     return run
-                if metasample_id == "9_11_OY6H_middle_and_big":
-                    return "run_3"
             
             raise Exception(f"Run not found for metasample id {metasample_id}")
 
@@ -907,30 +907,24 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 for sample_id in sample_ids:
                     joint_id = f"{method}__{sample_id}"
                     proseg_key_str = "_".join(proseg_key) + "_proseg"
+
                     geo_df = sdata.shapes["cells_boundaries"]
+                    geo_df = geo_df.merge(adata.obs, left_on="cell_id", right_on="cell_id")
                     geo_df["full_cell_id"] = geo_df["cell_id"].apply(lambda x: f"{proseg_key_str}-{x}")
                     geo_df["patient_id"] = metasample_id
                     geo_df["method"] = method
                     geo_df["run_id"] = run
                     geo_df["joint_id"] = joint_id
                     
-                    if metasample_id in ["8samples", "18samples", "9_11_OY6H_middle_and_big"]:
-                        geo_df['sample_id'] = list(adata.obs['sample_corrected'])
-                    else:
-                        geo_df['sample_id'] = metasample_id
+                    if metasample_id not in ["8samples", "18samples", "9_11_OY6H_middle_and_big"]:
+                        geo_df['sample_corrected'] = metasample_id
 
-                    # columns: foll_cell_id, Cell_ID, Organoid_ID, patient_id, method, geometry
+                    geo_df["sample_id"] = geo_df["sample_corrected"]
                     geo_df_for_sample = geo_df[geo_df['sample_id'] == sample_id]
+
+
                     joined_df = geo_df_for_sample.merge(organoid_cell_mapping, left_on="full_cell_id", right_on="full_id", how="inner")
-
-                    # Get organoid IDs with at least 20 cells
-                    # to be clear, "component_and_cluster_labels" is organoid id... don't ask why :P
-                    organoid_counts = joined_df[self.organoid_id_column_key].value_counts()
-                    valid_organoids = organoid_counts[organoid_counts >= self.organoid_count_threshold].index
-
-                    # Filter the DataFrame
-                    joined_df = joined_df[joined_df[self.organoid_id_column_key].isin(valid_organoids)]
-                    joined_df = joined_df[joined_df[self.organoid_id_column_key] != 0]
+                    assert len(joined_df) > 0, f"No cells found for sample {sample_id} in organoid mapping."
 
                     for organoid_id, group in joined_df.groupby(self.organoid_id_column_key):
                         # Get bounding box
@@ -946,7 +940,11 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
 
                     self.organoid_dfs[(*proseg_key, sample_id)] = joined_df
                     print(f"Max pixel side length across all organoids: {max_pixel_side_length}")
+
             except Exception as e:
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname, exc_tb.tb_lineno)
                 import pdb; pdb.set_trace()
                 c=2
 
