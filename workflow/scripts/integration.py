@@ -114,6 +114,7 @@ def evaluate_label_transfer(
     values_format: str = None,
     text_kw: dict = None,
     save_path: str = None,
+    show=True,
 ):
     """
     Calculates performance metrics and plots a customizable confusion matrix.
@@ -176,7 +177,8 @@ def evaluate_label_transfer(
         p = Path(save_path)
         p.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(p, dpi=300, bbox_inches="tight")
-    plt.show()
+    if show:
+        plt.show()
     return disp
 
 
@@ -264,7 +266,7 @@ def find_neighbor_same_donor(
 
         # Skip if donor is not present in both conditions
         if not np.any(source_mask) or not np.any(target_mask):
-            print("\tDonor not found in both conditions")
+            print(f"\t{donor} not found in both conditions")
             continue
 
         # Get data and integer positions using the masks

@@ -75,10 +75,10 @@ SAMPLE_PALETTE = Path(config['sample_palette'])
 path_parts = [p.parent.parts[-5:] for p in STD_SEURAT_ANALYSIS_DIR.glob("*/*/*/*/*/*")]
 PATHS_PARAMS = pd.DataFrame(path_parts, columns=["segmentation", "condition", "panel", "donor", "sample"])
 
-# # Filter out any unwanted top-level directories
-# PATHS_PARAMS = PATHS_PARAMS[
-#     ~PATHS_PARAMS['segmentation'].isin(['proseg_mode', 'bats_normalised', 'bats_expected'])
-# ]
+# # Filter out any unwanted directories
+PATHS_PARAMS = PATHS_PARAMS[
+    PATHS_PARAMS['segmentation'].isin(['proseg_expected'])
+]
 
 # =================================================================================
 # II. GENERAL PARAMETER DEFINITIONS

@@ -188,6 +188,7 @@ for (file_path in seurat_files) {
 
     # c. Load Seurat object and add metadata
     seurat_obj <- readRDS(file_path)
+    seurat_obj <- UpdateSeuratObject(seurat_obj)
     seurat_obj$cell_id <- colnames(seurat_obj)
     seurat_obj$segmentation <- segmentation_val
     seurat_obj$condition <- condition_val

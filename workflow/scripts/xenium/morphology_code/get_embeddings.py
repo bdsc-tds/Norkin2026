@@ -712,17 +712,6 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
         """
         super().__init__()
 
-        if fill:
-            save_path += "_fill"
-        else:
-            save_path += "_nofill"
-
-        if scale:
-            standardize_scale_suffix = "_standardized.pkl" if standardize_scale else "_unstandardized.pkl"
-            save_path += standardize_scale_suffix
-        else:
-            save_path += "_no_scale.pkl"
-
         self.fill = fill
         self.organoid_cell_mapping_path = organoid_cell_mapping_path
         self.organoid_id_column_key = organoid_id_column_key
@@ -835,26 +824,28 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             panels_filter=[panel] if panel != "all" else None,
         )
 
-        # set transcripts=True to load individual transcripts positions)
         if correction_method != "raw":
-            ads = readwrite.read_count_correction_samples(xenium_paths, [correction_method])
+            sds = readwrite.read_count_correction_samples(xenium_paths, [correction_method])
         else:
-            ads = {}
-            ads["raw"] = readwrite.read_xenium_samples(
+            sds = {}
+            sds["raw"] = readwrite.read_xenium_samples(
                 xenium_paths["raw"], anndata=False, cells_boundaries=True, pool_mode="thread", max_workers=6
             )
 
-        # add cell type annotation from raw to all correction methods
-        readwrite.read_annotations(ads, [correction_method], xenium_annot_paths, level, max_workers=8)
+        if segmentation == "proseg_expected":
+            for k, ad in sds[correction_method].items():
+                # fix_proseg_names
+                ad["table"].obs_names = ad["table"].obs_names.astype(str)
+                if not ad["table"].obs_names[0].startswith("proseg-"):
+                    ad["table"].obs_names = "proseg-" + ad["table"].obs_names
 
         # add 'donor_corrected' and 'sample_corrected' labels to 18samples and 8samples
-        samples2split_dict = {k[-2]: k for k in ads["raw"].keys() if k[-2] in ["18samples", "8samples"]}
-        coords_csv_dict = {
-            k: cfg["xenium_metadata_dir"] + f"Regions_coordinates_{k}.csv" for k in ["18samples", "8samples"]
-        }
-        readwrite.split_samples_by_coords(ads, samples2split_dict, coords_csv_dict, plot=plot)
+        samples2split = ["18samples", "8samples", "9_11_OY6H_middle_and_big"]
+        samples2split_dict = {k[-2]: k for k in sds["raw"].keys() if k[-2] in samples2split}
+        coords_csv_dict = {k: cfg["xenium_metadata_dir"] + f"Regions_coordinates_{k}.csv" for k in samples2split}
+        readwrite.split_samples_by_coords(sds, samples2split_dict, coords_csv_dict, plot=plot)
 
-        return ads
+        return sds
 
     def _process_raw_data_from_sdata(self, adata_save_pth, use_cached_adata):
         organoid_cell_mapping = pd.read_parquet(self.organoid_cell_mapping_path).reset_index()
@@ -896,8 +887,12 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 metasample_id = proseg_key[3]
                 run = get_run_id(proseg_key, metasample_id)
 
-                if metasample_id == "9_11_OY6H_middle_and_big":
-                    continue
+                proseg_key_str = "_".join(proseg_key) + "_proseg"
+                geo_df = ads["raw"][proseg_key]["cells_boundaries"]
+                geo_df["full_cell_id"] = geo_df["cell_id"].apply(lambda x: f"{proseg_key_str}-{x}")
+                geo_df["patient_id"] = patient_id
+                geo_df["method"] = method
+                geo_df["joint_id"] = joint_id
 
                 sdata = ads["raw"][proseg_key]
                 adata = sdata.tables['table']
@@ -1103,6 +1098,8 @@ def get_morphological_features(masks):
             "perimeter_sharpness": 0,
             "median_distance_to_edge": 0,
             "num_holes": 0,
+            "num_holes_topological": 0,
+            "interior_holes_to_object_area_percentage": 0,
             "interior_holes_percentage": 0,
         }
 
@@ -1137,17 +1134,26 @@ def get_morphological_features(masks):
             # Calculate interior holes percentage - black points completely surrounded by white
             # Fill all holes in the binary mask
             filled_mask = ndi.binary_fill_holes(combined_mask)
+            interior_holes_mask = filled_mask & ~combined_mask
+
+            # label true topological holes (rather than e.g. counting black area inside "C" shapes)
+            labeled_holes_topological = label(interior_holes_mask)
+            num_holes_topological = np.max(labeled_holes_topological)
+
+            # Interior holes with respect to the object area mask and original mask
+            interior_holes_count = np.sum(interior_holes_mask)
+            total_object_pixels = np.sum(combined_mask)
 
             # Interior holes are the difference between filled mask and original mask
-            interior_holes = filled_mask & ~combined_mask
-            interior_holes_count = np.sum(interior_holes)
-            total_object_pixels = np.sum(combined_mask)
+            hole_area = np.sum(interior_holes_mask)
+            filled_area = np.sum(filled_mask)
+            interior_holes_percentage = (100 * hole_area / filled_area) if filled_area > 0 else 0
 
             # Calculate percentage of interior holes relative to total object area
             if total_object_pixels > 0:
-                interior_holes_percentage = (interior_holes_count / total_object_pixels) * 100
+                interior_holes_to_object_area_percentage = (interior_holes_count / total_object_pixels) * 100
             else:
-                interior_holes_percentage = 0
+                interior_holes_to_object_area_percentage = 0
 
             # Aggregate properties across all regions
             mask_features = {
@@ -1162,6 +1168,8 @@ def get_morphological_features(masks):
                 "perimeter_sharpness": perimeter_sharpness,
                 "median_distance_to_edge": median_distance,
                 "num_holes": num_holes,
+                "num_holes_topological": num_holes_topological,
+                "interior_holes_to_object_area_percentage": interior_holes_to_object_area_percentage,
                 "interior_holes_percentage": interior_holes_percentage,
             }
 
