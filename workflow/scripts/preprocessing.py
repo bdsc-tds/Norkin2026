@@ -1089,9 +1089,10 @@ def pseudobulk(ad, key, mode="sum", agg_columns=None, layer=None):
         else:
             raise ValueError("mode has to be sum or mean")
 
+    stats = dict(sorted(stats.items()))
     ad_states = sc.AnnData(pd.DataFrame(stats).T)
     ad_states.var_names = ad.var_names
-    ad_states.obs = ad.obs.groupby(key).agg(_aggregate)
+    ad_states.obs = ad_states.obs.join(ad.obs.groupby(key).agg(_aggregate))
     return ad_states
 
 
