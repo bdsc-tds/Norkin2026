@@ -969,6 +969,7 @@ def dot_clustermap(
     cbar_title="",
     cbar_position=[0.0, 0.4, 0.05, 0.5],
     dotbar_position=[0.05, 0.4, 0.05, 0.5],
+    xtick_rotation=45,
     show=True,
     output_path=None,
     **clustermap_kwargs,
@@ -1080,7 +1081,14 @@ def dot_clustermap(
             spine.set_visible(False)
 
     ax_main.set_xticks(np.arange(len(df_color_ordered.columns)))
-    ax_main.set_xticklabels(df_color_ordered.columns, rotation=90)
+    # Align right so labels flow diagonally away from the axis without overlapping
+    # ax_main.set_xticklabels(df_color_ordered.columns, rotation=xtick_rotation)
+    ax_main.set_xticklabels(
+        df_color_ordered.columns, 
+        rotation=xtick_rotation, 
+        ha="right" if xtick_rotation not in [0, 90] else "center", 
+        rotation_mode="anchor"
+    )
     ax_main.set_yticks(np.arange(len(df_color_ordered.index)))
     ax_main.set_yticklabels(df_color_ordered.index)
     ax_main.set_xlim(-0.5, df_color_ordered.shape[1] - 0.5)
