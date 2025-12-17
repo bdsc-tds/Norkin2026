@@ -7,12 +7,13 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import anndata as ad
+from statsmodels.stats.multitest import multipletests
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.gridspec import GridSpec
 from matplotlib.patches import Patch
 from scipy.cluster.hierarchy import linkage, cut_tree, leaves_list, optimal_leaf_ordering
 from scipy.spatial.distance import pdist
-from scipy.stats import spearmanr, rankdata
+from scipy.stats import spearmanr, pearsonr, rankdata
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.metrics import pairwise_distances
 import matplotlib.patches as mpatches
@@ -25,6 +26,42 @@ sys.path.append("../../scripts")
 import readwrite
 
 cfg = readwrite.config()
+
+
+def apply_fdr(p_df, fdr_axis=None, method="fdr_bh"):
+    """
+    Args:
+        p_df: DataFrame of raw p-values.
+        fdr_axis: 0 (per col), 1 (per row), or None (global).
+    """
+    # 1. Handle Global Correction (The Flatten/Reshape case)
+    if fdr_axis is None:
+        # ravel() is faster than flatten() (view vs copy)
+        p_vals_flat = p_df.values.ravel()
+
+        # Mask NaNs (multipletests often crashes or behaves weirdly with NaNs)
+        mask = np.isfinite(p_vals_flat)
+        p_corrected_flat = np.full(p_vals_flat.shape, np.nan)  # standard placeholder
+
+        # Only correct the valid numbers
+        if mask.any():
+            _, p_corrected_flat[mask], _, _ = multipletests(p_vals_flat[mask], method=method)
+
+        # SAFE RECONSTRUCTION:
+        # Don't rely on reshape order alone. Pass index/cols explicitly.
+        return pd.DataFrame(p_corrected_flat.reshape(p_df.shape), index=p_df.index, columns=p_df.columns)
+
+    # 2. Handle Axis-wise Correction
+    else:
+        # We use apply(), but we must ensure NaNs don't break statsmodels
+        def correct_row_col(series):
+            mask = np.isfinite(series.values)
+            corrected = np.full(series.shape, np.nan)
+            if mask.any():
+                _, corrected[mask], _, _ = multipletests(series.values[mask], method=method)
+            return pd.Series(corrected, index=series.index)
+
+        return p_df.apply(correct_row_col, axis=fdr_axis)
 
 
 def prepare_clustered_data(
@@ -474,7 +511,58 @@ def barplot(
     plt.show()
 
 
-def compute_correlation(
+def compute_correlation_scipy(
+    adata: ad.AnnData, morph_key: str, morph_features: list, metric: str = "spearman", fdr_axis: int = None
+) -> dict:
+    """
+    Computes correlation, p-values, and FDR-adjusted p-values using Scipy.
+    Optimized for smaller gene sets (e.g., ~400 genes).
+    """
+
+    # Dense array required for scipy.stats
+    X = adata.X
+    if hasattr(X, "toarray"):
+        X = X.toarray()
+
+    Y = adata.obsm[morph_key]
+
+    # Containers for results
+    genes = adata.var_names
+    n_genes = len(genes)
+    r_df = pd.DataFrame(index=genes, columns=morph_features)
+    p_df = pd.DataFrame(index=genes, columns=morph_features)
+
+    # --- OUTER LOOP ---
+    for col_idx, feature in enumerate(morph_features):
+        y_vec = Y[:, col_idx]
+
+        col_r = np.zeros(n_genes)
+        col_p = np.zeros(n_genes)
+
+        # --- INNER LOOP: Genes ---
+        for gene_idx in range(n_genes):
+            x_vec = X[:, gene_idx]
+
+            if metric == "spearman":
+                res = spearmanr(x_vec, y_vec)
+                col_r[gene_idx] = getattr(res, "statistic", res[0])
+                col_p[gene_idx] = getattr(res, "pvalue", res[1])
+
+            elif metric == "pearson":
+                stat, pval = pearsonr(x_vec, y_vec)
+                col_r[gene_idx] = stat
+                col_p[gene_idx] = pval
+
+        # Assign the columns to the DataFrames
+        r_df[feature] = col_r
+        p_df[feature] = col_p
+
+    # --- FDR Correction ---
+    padj_df = apply_fdr(p_df, fdr_axis=fdr_axis)
+    return {"correlation": r_df, "pval": p_df, "padj": padj_df}
+
+
+def compute_correlation_sklearn(
     adata: ad.AnnData, morph_key: str, morph_features: list, metric: str = "spearman"
 ) -> pd.DataFrame:
     """
@@ -860,177 +948,306 @@ def joint_clustermap(
 
 
 def dot_clustermap(
-    data,
-    dot_size_df=None,
+    data_color,
+    data_size=None,
     row_annot=None,
     col_annot=None,
     row_cmap=None,
     col_cmap=None,
-    dot_scale=50,
-    legend_width=0.8,
-    legend_spacing=0.3,
-    cbar_params=None,
-    size_legend_params=None,
-    cbar_pos=(0.55, 0.4),
-    size_legend_pos=(0, 0.45),
-    show_xticks=True,
-    show_yticks=True,
-    **kwargs,
+    dot_min=0,
+    dot_max=100,
+    val_min=None,
+    val_max=None,
+    val_range=None,
+    cmap="RdBu_r",
+    figsize=(10, 8),
+    center=None,  # The value at which the colormap centers (e.g., 0)
+    show_grid=False,  # Whether to show grid lines
+    grid_kws=None,  # Dict for grid style (e.g. {'alpha':0.3, 'color':'grey'})
+    show_frame=True,  # Whether to show the box/spines around the plot
+    dot_title=r"$-\log_{10}(\mathrm{Padj})$",
+    cbar_title="",
+    cbar_position=[0.0, 0.4, 0.05, 0.5],
+    dotbar_position=[0.05, 0.4, 0.05, 0.5],
+    xtick_rotation=45,
+    show=True,
+    output_path=None,
+    **clustermap_kwargs,
 ):
     """
-    Creates a dot plot with clustering, multi-track annotations, labels, and customizable legends.
-
     Args:
-        data (pd.DataFrame): The rectangular data matrix for dot COLOR.
-        dot_size_df (pd.DataFrame, optional): A separate rectangular data matrix for
-                                           dot SIZE. Must have the same index and
-                                           columns as `data`. If None, `data` is used
-                                           for both color and size.
-        row_annot (pd.Series or pd.DataFrame, optional): Categorical annotations for rows.
-        col_annot (pd.Series or pd.DataFrame, optional): Categorical annotations for columns.
-        row_cmap (dict, optional): Nested dictionary mapping row annotation values to colors.
-        col_cmap (dict, optional): Nested dictionary for column annotation values to colors.
-        dot_scale (int, optional): Scaling factor for dot size.
-        legend_width (float, optional): Width ratio for the legend column.
-        legend_spacing (float, optional): Width of the space between the plot and legends.
-        cbar_params (dict, optional): Parameters for the colorbar legend.
-        size_legend_params (dict, optional): Parameters for the dot size legend.
-        cbar_pos (tuple, optional): (y, height) for the colorbar.
-        size_legend_pos (tuple, optional): (y, height) for the size legend.
-        **kwargs: Additional keyword arguments passed to seaborn.clustermap.
+        dot_min (int): Visual size of the smallest dot in points^2.
+        dot_max (int): Visual size of the largest dot.
+        val_min (float): Data value that corresponds to dot_min.
+                         Set to 0 for fractions/percentages.
+        val_max (float): Data value that corresponds to dot_max.
+                         Set to 1 for fractions/percentages.
+        val_range (list): List of values to use for the dots.
     """
 
-    # --- 1. Process annotations (unchanged) ---
-    def process_annotations(annot, cmap):
-        if annot is None:
-            return None
-        if isinstance(annot, pd.Series):
-            annot = annot.to_frame()
-        annot_colors = pd.DataFrame(index=annot.index)
-        for col_name in annot.columns:
-            track_cmap = (cmap or {}).get(col_name, {})
-            unique_items = annot[col_name].dropna().unique()
-            missing_items = set(unique_items) - set(track_cmap.keys())
-            if missing_items:
-                palette = sns.color_palette("husl", len(missing_items))
-                for item, color in zip(missing_items, palette):
-                    track_cmap[item] = color
-            annot_colors[col_name] = annot[col_name].map(track_cmap)
-        return annot_colors
+    # 1. Standardize Inputs
+    if data_size is None:
+        data_size = data_color.copy()
 
-    row_colors, col_colors = process_annotations(row_annot, row_cmap), process_annotations(col_annot, col_cmap)
+    if not data_color.index.equals(data_size.index) or not data_color.columns.equals(data_size.columns):
+        raise ValueError("Color and Size dataframes must have identical index and columns.")
 
-    # --- 2. Generate clustermap for ordering (based on `data` for color) ---
-    clustergrid = sns.clustermap(data, row_colors=row_colors, col_colors=col_colors, cbar_pos=None, **kwargs)
-    plt.close(clustergrid.fig)
+    # 2. Clustering (on Color Matrix)
+    cluster_grid = sns.clustermap(data_color, cbar_pos=None, **clustermap_kwargs)
+    row_order = cluster_grid.dendrogram_row.reordered_ind
+    col_order = cluster_grid.dendrogram_col.reordered_ind
+    plt.close(cluster_grid.fig)
 
-    # --- 3. Reorder both color and size DataFrames ---
-    row_indices = clustergrid.dendrogram_row.reordered_ind
-    col_indices = clustergrid.dendrogram_col.reordered_ind
-    reordered_color_data = data.iloc[row_indices, col_indices]
+    # 3. Reorder Data
+    df_color_ordered = data_color.iloc[row_order, col_order]
+    df_size_ordered = data_size.iloc[row_order, col_order]
 
-    if dot_size_df is None:
-        reordered_size_data = reordered_color_data
-    else:
-        if not data.index.equals(dot_size_df.index) or not data.columns.equals(dot_size_df.columns):
-            raise ValueError("`dot_size_df` must have the same index and columns as `data`.")
-        reordered_size_data = dot_size_df.iloc[row_indices, col_indices]
+    # 4. Tidy Format
+    xx, yy = np.meshgrid(np.arange(df_color_ordered.shape[1]), np.arange(df_color_ordered.shape[0]))
 
-    # --- 4. Dynamically create the figure layout (unchanged) ---
-    n_row_tracks = row_colors.shape[1] if row_colors is not None else 0
-    n_col_tracks = col_colors.shape[1] if col_colors is not None else 0
-    figsize = kwargs.get("figsize", (10, 10))
+    df_plot = pd.DataFrame(
+        {
+            "x": xx.flatten(),
+            "y": yy.flatten(),
+            "color_val": df_color_ordered.values.flatten(),
+            "size_val": df_size_ordered.values.flatten(),
+        }
+    )
+
+    # --- 5. ROBUST SIZE SCALING ---
+    # Determine the Data Range (Anchors)
+    # If user provided fixed bounds (e.g. 0 to 1), use them.
+    # Otherwise auto-detect from data.
+    d_min = val_min if val_min is not None else df_plot["size_val"].min()
+    d_max = val_max if val_max is not None else df_plot["size_val"].max()
+
+    # Clip data to these bounds (prevents dots exploding if data > val_max)
+    clipped_sizes = df_plot["size_val"].clip(d_min, d_max)
+
+    # Normalize Data to 0.0 - 1.0
+    norm_sizes = (clipped_sizes - d_min) / (d_max - d_min)
+
+    # Map to Visual Size Range [dot_min, dot_max]
+    # Formula: Size = MinSize + (NormalizedData * (MaxSize - MinSize))
+    df_plot["s_final"] = dot_min + norm_sizes * (dot_max - dot_min)
+
+    # Layout Setup
+    n_row_tracks = row_annot.shape[1] if row_annot is not None else 0
+    n_col_tracks = col_annot.shape[1] if col_annot is not None else 0
+
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(
         1 + n_col_tracks,
         3 + n_row_tracks,
-        height_ratios=[0.2] * n_col_tracks + [5],
-        width_ratios=[5] + [0.2] * n_row_tracks + [legend_spacing] + [legend_width],
-        wspace=0,
-        hspace=0,
+        height_ratios=[0.2] * n_col_tracks + [10],
+        width_ratios=[10] + [0.2] * n_row_tracks + [0.5, 1.5],
+        wspace=0.05,
+        hspace=0.05,
     )
 
-    # --- 5. Plot the main dot plot using separate data for size and color ---
+    norm = None
+    if center is not None:
+        # We must define vmin/vmax for TwoSlopeNorm to work
+        v_min = clustermap_kwargs.get("vmin", df_plot["color_val"].min())
+        v_max = clustermap_kwargs.get("vmax", df_plot["color_val"].max())
+        norm = mcolors.TwoSlopeNorm(vcenter=center, vmin=v_min, vmax=v_max)
+
+        # Remove vmin/vmax/center from kwargs so scatter doesn't complain about double args
+        clustermap_kwargs.pop("vmin", None)
+        clustermap_kwargs.pop("vmax", None)
+        clustermap_kwargs.pop("center", None)
+
+    # Main Plot
     ax_main = fig.add_subplot(gs[n_col_tracks, 0])
-    x, y = np.meshgrid(np.arange(reordered_color_data.shape[1]), np.arange(reordered_color_data.shape[0]))
 
-    dot_sizes = reordered_size_data.values.flatten() * dot_scale / reordered_size_data.values.max()
-
-    scatter_artist = ax_main.scatter(
-        x=x.flatten(),
-        y=y.flatten(),
-        s=dot_sizes,
-        c=reordered_color_data.values.flatten(),
-        cmap=kwargs.get("cmap", "viridis"),
-        alpha=0.9,
+    sc = ax_main.scatter(
+        x=df_plot["x"],
+        y=df_plot["y"],
+        s=df_plot["s_final"],
+        c=df_plot["color_val"],
+        cmap=cmap,
+        norm=norm,
+        **clustermap_kwargs,  # Pass remaining kwargs (like vmin/vmax if center wasn't used)
     )
-    if show_xticks:
-        ax_main.set_xticks(np.arange(reordered_color_data.shape[1]))
-        ax_main.set_xticklabels(reordered_color_data.columns, rotation=90)
-    else:
-        ax_main.set_xticks([])
-    if show_yticks:
-        ax_main.set_yticks(np.arange(reordered_color_data.shape[0]))
-        ax_main.set_yticklabels(reordered_color_data.index)
-    else:
-        ax_main.set_yticks([])
 
-    # ax_main.grid(True, which='both', linestyle='--', linewidth=0.5, zorder=0)
+    # Axes formatting
+    if show_grid:
+        g_kws = grid_kws or {"color": "gray", "alpha": 0.1, "linestyle": "--"}
+        ax_main.grid(True, zorder=0, **g_kws)  # zorder=0 puts grid behind dots
+        ax_main.set_axisbelow(True)
+
+    if not show_frame:
+        for spine in ax_main.spines.values():
+            spine.set_visible(False)
+
+    ax_main.set_xticks(np.arange(len(df_color_ordered.columns)))
+    # Align right so labels flow diagonally away from the axis without overlapping
+    # ax_main.set_xticklabels(df_color_ordered.columns, rotation=xtick_rotation)
+    ax_main.set_xticklabels(
+        df_color_ordered.columns, 
+        rotation=xtick_rotation, 
+        ha="right" if xtick_rotation not in [0, 90] else "center", 
+        rotation_mode="anchor"
+    )
+    ax_main.set_yticks(np.arange(len(df_color_ordered.index)))
+    ax_main.set_yticklabels(df_color_ordered.index)
+    ax_main.set_xlim(-0.5, df_color_ordered.shape[1] - 0.5)
+    ax_main.set_ylim(-0.5, df_color_ordered.shape[0] - 0.5)
     ax_main.invert_yaxis()
-    ax_main.set_xlim(-0.5, reordered_color_data.shape[1] - 0.5)
-    ax_main.tick_params(top=False, right=False, left=False, bottom=False)
-    [spine.set_visible(False) for spine in ax_main.spines.values()]
 
-    # --- 6. Plot annotation color bars (unchanged) ---
-    if n_col_tracks > 0:
-        col_colors_reordered = col_colors.iloc[col_indices]
-        for i, name in enumerate(col_colors_reordered.columns):
-            ax = fig.add_subplot(gs[i, 0], sharex=ax_main)
-            rgb = np.array([matplotlib.colors.to_rgb(c) for c in col_colors_reordered[name]])
-            ax.imshow(rgb[np.newaxis, :, :], aspect="auto", interpolation="nearest")
-            ax.set_ylabel(name, rotation=0, ha="right", va="center", fontsize=9)
-            ax.tick_params(left=False, labelleft=False, bottom=False, labelbottom=False)
-            [s.set_visible(False) for s in ax.spines.values()]
-    if n_row_tracks > 0:
-        row_colors_reordered = row_colors.iloc[row_indices]
-        for i, name in enumerate(row_colors_reordered.columns):
-            ax = fig.add_subplot(gs[n_col_tracks, 1 + i], sharey=ax_main)
-            rgb = np.array([matplotlib.colors.to_rgb(c) for c in row_colors_reordered[name]])
-            ax.imshow(rgb[:, np.newaxis, :], aspect="auto", interpolation="nearest")
-            ax.set_title(name, rotation=75, ha="left", va="bottom", fontsize=9)
-            ax.tick_params(left=False, labelleft=False, bottom=False, labelbottom=False)
-            [s.set_visible(False) for s in ax.spines.values()]
+    # Annotation Helper
+    def plot_annot(annot_df, cmap_dict, indicies, is_row=True, ax_slot=None):
+        if annot_df is None:
+            return
+        reordered = annot_df.iloc[indicies]
+        for i, col in enumerate(reordered.columns):
+            ax = fig.add_subplot(ax_slot(i))
+            c_map = cmap_dict.get(col, {}) if cmap_dict else {}
+            # Auto-color if missing
+            unique = reordered[col].unique()
+            for v in unique:
+                if v not in c_map:
+                    c_map[v] = plt.cm.tab20(hash(v) % 20)
 
-    # --- 7. Add Legends, with size legend based on `reordered_size_data` ---
-    legend_ax_container = fig.add_subplot(gs[n_col_tracks, 2 + n_row_tracks])
-    legend_ax_container.axis("off")
-    bbox = legend_ax_container.get_position()
+            rgb = np.array([mcolors.to_rgb(c_map[v]) for v in reordered[col]])
+            if is_row:
+                ax.imshow(rgb[:, np.newaxis, :], aspect="auto")
+                ax.set_title(col, rotation=90, fontsize=8)
+            else:
+                ax.imshow(rgb[np.newaxis, :, :], aspect="auto")
+                ax.set_ylabel(col, rotation=0, ha="right", fontsize=8)
+            ax.axis("off")
 
-    cbar_params = cbar_params or {}
-    size_params = size_legend_params or {}
+    if col_annot is not None:
+        plot_annot(col_annot, col_cmap, col_order, False, lambda i: gs[i, 0])
+    if row_annot is not None:
+        plot_annot(row_annot, row_cmap, row_order, True, lambda i: gs[n_col_tracks, 1 + i])
 
-    # Colorbar Legend (based on `data`)
-    ax_colorbar = fig.add_axes([bbox.x0, bbox.y0 + bbox.height * cbar_pos[0], bbox.width, bbox.height * cbar_pos[1]])
-    cbar = fig.colorbar(scatter_artist, cax=ax_colorbar, orientation="vertical")
-    if "ticks" in cbar_params:
-        cbar.set_ticks(cbar_params["ticks"])
-    elif "nticks" in cbar_params:
-        cbar.locator = mticker.MaxNLocator(nbins=cbar_params["nticks"])
-        cbar.update_ticks()
-    cbar.set_label(cbar_params.get("label", "Color Value"), rotation=-90, va="bottom")
+    # Legends
+    ax_leg = fig.add_subplot(gs[n_col_tracks, -1])
+    ax_leg.axis("off")
 
-    # Size Legend (based on `dot_size_df`)
-    ax_size_legend = fig.add_axes(
-        [bbox.x0, bbox.y0 + bbox.height * size_legend_pos[0], bbox.width, bbox.height * size_legend_pos[1]]
+    # Color Legend
+    cax = ax_leg.inset_axes(cbar_position)
+    cbar = plt.colorbar(sc, cax=cax, orientation="vertical")
+    cbar.set_label(cbar_title, rotation=90, labelpad=10)
+
+    # Size Legend (Calculated using exact same math)
+    # Create 4 steps between the chosen Min/Max Value
+    if val_range is None:
+        val_range = np.linspace(d_min, d_max, 4)
+
+    legend_handles = []
+    for val in val_range:
+        # Avoid showing 0.0 in legend if it maps to size 0 (invisible)
+        norm = (val - d_min) / (d_max - d_min) if d_max > d_min else 0
+        s_vis = dot_min + norm * (dot_max - dot_min)
+
+        if s_vis > 0:  # Only plot visible dots
+            legend_handles.append(ax_main.scatter([], [], s=s_vis, c="gray", label=f"{val:.3g}"))
+
+    ax_leg.legend(
+        handles=legend_handles,
+        title=dot_title,
+        loc="upper left",
+        bbox_to_anchor=dotbar_position,
+        frameon=False,
+        labelspacing=1,
     )
-    legend_values = size_params.get("values", np.percentile(reordered_size_data.values, [10, 50, 90]))
-    legend_labels = size_params.get("labels", [f"{v:.2g}" for v in legend_values])
-    legend_title = size_params.get("title", "Size Value")
-    sizes = np.array(legend_values) * dot_scale / reordered_size_data.values.max()
-    handles = [ax_size_legend.scatter([], [], s=s, color="gray", alpha=0.8) for s in sizes]
-    ax_size_legend.legend(
-        handles=handles, labels=legend_labels, title=legend_title, frameon=False, labelspacing=1.3, loc="center"
-    )
-    ax_size_legend.axis("off")
 
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close()
+
+
+def volcano(
+    df,
+    logfc_col="logfoldchanges",
+    pval_col="pvals_adj",
+    gene_col=None,  # column to label (index can also be used)
+    color_col=None,
+    fc_thresh=2,
+    pval_thresh=0.05,
+    top_n_labels=10,
+    figsize=(8, 6),
+    colors=("grey", "blue", "red"),
+):
+    """
+    Volcano plot from a DataFrame.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with DE results
+    logfc_col : str
+        Column name for log fold change
+    pval_col : str
+        Column name for adjusted p-value
+    gene_col : str
+        Column name for gene names; if None, use df.index
+    fc_thresh : float
+        Fold-change threshold for highlighting
+    pval_thresh : float
+        P-value threshold for significance
+    top_n_labels : int
+        Number of top up/down genes to label
+    figsize : tuple
+        Figure size
+    colors : tuple
+        Colors for (non-sig, down, up)
+    """
+
+    from adjustText import adjust_text
+
+    # Ensure gene names
+    if gene_col is None:
+        df_plot = df.copy()
+        df_plot["gene"] = df_plot.index
+    else:
+        df_plot = df.copy()
+        df_plot["gene"] = df_plot[gene_col]
+
+    # Calculate -log10(pval)
+    df_plot["minus_log10_p"] = -np.log10(df_plot[pval_col] + 1e-300)
+    is_sig = df_plot[pval_col] <= pval_thresh
+
+    # Base plot
+    plt.figure(figsize=figsize)
+    sns.scatterplot(
+        data=df_plot[~is_sig], x=logfc_col, y="minus_log10_p", color=colors[0], s=10, alpha=0.7, label="Not significant"
+    )
+
+    # Highlight up- and down-regulated
+    down = df_plot[(df_plot[logfc_col] <= -fc_thresh) & is_sig]
+    up = df_plot[(df_plot[logfc_col] >= fc_thresh) & is_sig]
+
+    if color_col is None:
+        sns.scatterplot(data=down, x=logfc_col, y="minus_log10_p", color=colors[1], s=20, label="Down-regulated")
+        sns.scatterplot(data=up, x=logfc_col, y="minus_log10_p", color=colors[2], s=20, label="Up-regulated")
+    else:
+        sns.scatterplot(data=df_plot[is_sig], x=logfc_col, y="minus_log10_p", hue=color_col, s=20)
+
+    # Label top N genes by p-value
+    texts = []
+    if top_n_labels > 0:
+        top_up = up.nsmallest(top_n_labels, pval_col)
+        top_down = down.nsmallest(top_n_labels, pval_col)
+        for _, r in pd.concat([top_up, top_down]).iterrows():
+            texts.append(plt.text(r[logfc_col], r["minus_log10_p"], r["gene"], fontsize=8))
+        adjust_text(texts, arrowprops=dict(arrowstyle="-", color="black", lw=0.5))
+
+    # Threshold lines
+    plt.axvline(-fc_thresh, color="grey", linestyle="--")
+    plt.axvline(fc_thresh, color="grey", linestyle="--")
+    plt.axhline(-np.log10(pval_thresh), color="grey", linestyle="--")
+
+    plt.xlabel("logFC")
+    plt.ylabel("-log10(p-value)")
+    plt.title("Volcano plot")
+    plt.legend()
+    sns.despine()
+    plt.tight_layout()
     plt.show()
