@@ -773,6 +773,9 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
             run_id = joined_df['run_id'].unique()[0]
             complete_key = "_".join(proseg_id_tuple)
             if sample_id == id_ and run_id == run_name:
+                if sample_id in ["077I", "1GAA"] and "hImmune_v1_mm" in complete_key:
+                    continue # skip multimodal dataframes for these samples, as they are not used
+                
                 complete_keys.append(sample_id)
                 dfs.append(joined_df)
 
@@ -887,19 +890,13 @@ class NorkinOrganoidDataset(torch.utils.data.Dataset):
                 metasample_id = proseg_key[3]
                 run = get_run_id(proseg_key, metasample_id)
 
-                proseg_key_str = "_".join(proseg_key) + "_proseg"
-                geo_df = ads["raw"][proseg_key]["cells_boundaries"]
-                geo_df["full_cell_id"] = geo_df["cell_id"].apply(lambda x: f"{proseg_key_str}-{x}")
-                geo_df["patient_id"] = patient_id
-                geo_df["method"] = method
-                geo_df["joint_id"] = joint_id
-
                 sdata = ads["raw"][proseg_key]
                 adata = sdata.tables['table']
 
                 sample_ids = adata.obs['sample_corrected'].unique().tolist() if metasample_id in ["8samples", "18samples", "9_11_OY6H_middle_and_big"] else [metasample_id]
                 #todo: add sample id here. 
                 for sample_id in sample_ids:
+                    print(f"Processing sample_id: {sample_id}")
                     joint_id = f"{method}__{sample_id}"
                     proseg_key_str = "_".join(proseg_key) + "_proseg"
 

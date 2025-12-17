@@ -5,8 +5,8 @@ ALIGNMENTS_ROOT="/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organ
 
 # Define sample filter - add sample IDs here to filter, leave empty to process all samples
 SAMPLES_FILTER=(
-    # "1DDI_CAFs"
     # "1H3R_2_ctrl"
+    # "1CFW"
 )
 # Example: SAMPLES_FILTER=("sample1" "sample2" "sample3")
 

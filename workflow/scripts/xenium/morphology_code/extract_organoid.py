@@ -64,7 +64,6 @@ def extract_reoriented_optimized(microscopy, joined_df, transform_matrix, organo
 
     joined_df_organoid['geometry'] = joined_df_organoid['geometry'].affine_transform(organoid_to_histopath_matrix_geodf)
     joined_df_organoid['geometry'] = joined_df_organoid['geometry'].buffer(distance=100)
-    import pdb; pdb.set_trace()
     
     histo_bounds = joined_df_organoid.total_bounds
     minx, miny, maxx, maxy = [int(coord) for coord in histo_bounds]
@@ -94,6 +93,17 @@ def save_png_preview(result, sample_id, organoid_id, root_dir=PREVIEW_DIR):
     preview_path = os.path.join(root_dir, f"{sample_id}_{organoid_id}.png")
     cv2.imwrite(preview_path, cv2.cvtColor(preview, cv2.COLOR_RGB2BGR))
     return preview_path
+
+def wsi_is_blank(wsi, tiff_path):
+    def get_dims(output_path): 
+        import tifffile
+        return tifffile.imread(output_path).shape
+
+    width, height, _ = get_dims(tiff_path)
+    total_area = width * height
+    tissue_fraction = wsi.shapes['tissues'].area[0] / total_area
+    return bool(tissue_fraction > 0.99)
+
 
 def extract_lazyslide_features(
     sample_id,
@@ -127,53 +137,59 @@ def extract_lazyslide_features(
     wsi.set_mpp(8.625e-2)
     
     zs.pp.find_tissues(wsi)
-    tile_coords_hne_relative, _ = zs.pp.tile_tissues(wsi,
-                       256, 
-                       overlap=2.0/3, 
-                       mpp=0.50,
-                       edge=True, 
-                       background_filter=True,
-                       background_filter_mode="exact",
-                       background_fraction=0.4,
-                       return_tiles=True
-    )
+    if wsi_is_blank(wsi, organoid_path):
+        raise Exception("Organoid is blank.")
+        
+    try: 
+        tile_coords_hne_relative, _ = zs.pp.tile_tissues(wsi,
+                        256, 
+                        overlap=2.0/3, 
+                        mpp=0.50,
+                        edge=True, 
+                        background_filter=True,
+                        background_filter_mode="exact",
+                        background_fraction=1.0,
+                        return_tiles=True
+        )
 
-    os.makedirs("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles", exist_ok=True)
-    zs.pl.tiles(wsi, 
-            tissue_id="all", 
-            linewidth=0.5)
-    plt.savefig(f"/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles/{sample_id}_{organoid_id}.png", dpi=300)
+        os.makedirs("/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles", exist_ok=True)
+        zs.pl.tiles(wsi, 
+                tissue_id="all", 
+                linewidth=0.5)
+        plt.savefig(f"/work/PRTNR/CHUV/DIR/rgottar1/spatial/env/lmcconn1/norkin_organoid/data/organoids_h&e/tiles/{sample_id}_{organoid_id}.png", dpi=300)
 
-    zs.tl.feature_extraction(wsi, model_type, amp=True)
+        zs.tl.feature_extraction(wsi, model_type, amp=True)
 
-    tile_coords_hne_absolute = tile_coords_hne_relative.copy()
-    tile_coords_hne_absolute['geometry'] = tile_coords_hne_absolute['geometry'].translate(xoff=he_min_x, yoff=he_min_y)
-    tile_coords_xenium_absolute = tile_coords_hne_absolute.copy()
-    histopath_to_orgnanoid_matrix_geodf = get_geodf_affine_transform_matrix(transform_matrix)
-    tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].affine_transform(histopath_to_orgnanoid_matrix_geodf)
-    tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].scale(1/SCALE_FACTOR, 1/SCALE_FACTOR, origin=(0,0))
-    
-    cells_in_tile = gpd.sjoin(joined_df, tile_coords_xenium_absolute, how='inner', predicate='intersects')
-    cells_in_tile = sd.models.ShapesModel.parse(cells_in_tile)
-    # Convert geometry to WKT string format
-    adata = wsi.fetch.features_anndata(model_type)
+        tile_coords_hne_absolute = tile_coords_hne_relative.copy()
+        tile_coords_hne_absolute['geometry'] = tile_coords_hne_absolute['geometry'].translate(xoff=he_min_x, yoff=he_min_y)
+        tile_coords_xenium_absolute = tile_coords_hne_absolute.copy()
+        histopath_to_orgnanoid_matrix_geodf = get_geodf_affine_transform_matrix(transform_matrix)
+        tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].affine_transform(histopath_to_orgnanoid_matrix_geodf)
+        tile_coords_xenium_absolute['geometry'] = tile_coords_xenium_absolute['geometry'].scale(1/SCALE_FACTOR, 1/SCALE_FACTOR, origin=(0,0))
+        
+        cells_in_tile = gpd.sjoin(joined_df, tile_coords_xenium_absolute, how='inner', predicate='intersects')
+        cells_in_tile = sd.models.ShapesModel.parse(cells_in_tile)
+        # Convert geometry to WKT string format
+        adata = wsi.fetch.features_anndata(model_type)
 
-    sdata = sd.SpatialData(
-        shapes={
-            "tile_coords_hne_absolute": tile_coords_hne_absolute, 
-            "tile_coords_hne_relative": tile_coords_hne_relative, 
-            "tile_coords_xenium_absolute": tile_coords_xenium_absolute,
-            "cells_in_tile": cells_in_tile,
-        },
-        tables={"features_adata": adata},
-    )
+        sdata = sd.SpatialData(
+            shapes={
+                "tile_coords_hne_absolute": tile_coords_hne_absolute, 
+                "tile_coords_hne_relative": tile_coords_hne_relative, 
+                "tile_coords_xenium_absolute": tile_coords_xenium_absolute,
+                "cells_in_tile": cells_in_tile,
+            },
+            tables={"features_adata": adata},
+        )
 
-    features_path = os.path.join(FEATURES_DIR, f"{sample_id}_{organoid_id}_features.zarr")
-    sdata.write(features_path, overwrite=True)
-    
-    print(f"Features saved: {features_path} (shape: {adata.X.shape})")
+        features_path = os.path.join(FEATURES_DIR, f"{sample_id}_{organoid_id}_features.zarr")
+        sdata.write(features_path, overwrite=True)
+        
+        print(f"Features saved: {features_path} (shape: {adata.X.shape})")
 
-    return sdata
+        return sdata
+    except Exception as e: 
+        raise Exception("No tiles of sufficient background were identified.")
 
 def transform_tile_coords_to_he_space(tile_coords, organoid_bbox, transform_matrix):
     """
@@ -239,7 +255,14 @@ def main_from_args(sample_id, organoid_id, run_name, model_type):
     
     try:
         organoid_id_column_key = 'component_and_cluster_and_lasso'
-        dataset = NorkinOrganoidDataset(standardize_scale=False, scale=True, fill=True, organoid_id_column_key=organoid_id_column_key)
+        dataset = NorkinOrganoidDataset(
+            standardize_scale=False, 
+            scale=True, 
+            fill=True,
+            organoid_id_column_key=organoid_id_column_key, 
+            use_cached_adata=True,
+            use_cached_masks=True,
+        )
 
         microscopy = get_microscopy(run_name, sample_id)
         transform_matrix = get_transform_matrix(run_name, sample_id)
