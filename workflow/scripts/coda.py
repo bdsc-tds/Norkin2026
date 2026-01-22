@@ -105,6 +105,7 @@ def get_ilr(
     label_key="cell_type",
     knn_key="X_spatial",
     knnidx=None,
+    min_neighbors=5,
 ):
     """
     Generate the isometric log ratio (ILR) transformation.
@@ -127,7 +128,8 @@ def get_ilr(
         knndis, knnidx = sklearn.neighbors.NearestNeighbors(radius=radius).fit(adata.obsm[knn_key]).radius_neighbors()
     df_dummies = pd.get_dummies(adata.obs[label_key])
     adata.obsm["X_knnlabels"] = get_knn_labels(knnidx, df_dummies)
-    adata = adata[adata.obsm["X_knnlabels"].sum(1) > 5].copy()
+    if min_neighbors is not None:
+        adata = adata[adata.obsm["X_knnlabels"].sum(1) >= min_neighbors].copy()
 
     adata.obsm["X_composition"] = adata.obsm["X_knnlabels"] / adata.obsm["X_knnlabels"].sum(1, keepdims=1)
 

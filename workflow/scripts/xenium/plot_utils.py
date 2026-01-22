@@ -111,48 +111,6 @@ def prepare_clustered_data(
 
     df_comp.reset_index(drop=True, inplace=True)
 
-    # # Run KMeans
-    # kmeans = KMeans(n_clusters=n_clusters, random_state=0).fit(df_comp)
-    # clusters = kmeans.labels_
-
-    # # Order clusters by centroid positions
-    # centroids = kmeans.cluster_centers_
-    # pc = PCA(n_components=1).fit(centroids)
-    # cluster_order = np.argsort(pc.transform(centroids).ravel())
-
-    # if order_by != "centroid":
-    #     all_points_projection = pc.transform(df_comp)
-
-    #     # This links each original index to its cluster and its projection score.
-    #     sorting_df = pd.DataFrame(
-    #         {"cluster": clusters, "projection": all_points_projection.ravel()}, index=df_comp.index
-    #     )
-
-    #     # 4. Enforce the desired cluster order by converting to a categorical type
-    #     #    This is crucial for the primary sort level.
-    #     sorting_df["cluster"] = pd.Categorical(sorting_df["cluster"], categories=cluster_order, ordered=True)
-
-    #     # 5. Perform a stable, two-level sort:
-    #     #    - Level 1: Sort by the ordered cluster category.
-    #     #    - Level 2: Sort by the projection score within each cluster.
-    #     sorted_df = sorting_df.sort_values(by=["cluster", "projection"])
-
-    #     # 6. The final ordered_indices is the index of this sorted DataFrame
-    #     ordered_indices = sorted_df.index.tolist()
-
-    # else:
-    #     # Create ordered index
-    #     ordered_indices = []
-    #     for c in cluster_order:
-    #         ordered_indices.extend(np.where(clusters == c)[0])
-
-    # df_comp_ordered = df_comp.iloc[ordered_indices]
-
-    # annotations_ordered["Cluster"] = clusters_ordered
-    # for k, anno in annotations.items():
-    #     annotations_ordered[k] = anno.iloc[ordered_indices]
-    # clusters_ordered = pd.Series(clusters[ordered_indices], index=df_comp_ordered.index, name="Cluster")
-
     # Order annotations
     annotations_ordered = {}
 
@@ -194,7 +152,7 @@ def prepare_clustered_data(
     # Key 2: PCA Projection - ensures smoothness within the micro-cluster dots
 
     # Calculate global PCA for local smoothing
-    projection = PCA(n_components=1).fit_transform(df_comp).flatten()
+    projection = PCA(n_components=1, random_state=0).fit_transform(df_comp).flatten()
 
     sorting_df = pd.DataFrame({"micro_id": micro_labels, "projection": projection}, index=df_comp.index)
 
@@ -1084,10 +1042,10 @@ def dot_clustermap(
     # Align right so labels flow diagonally away from the axis without overlapping
     # ax_main.set_xticklabels(df_color_ordered.columns, rotation=xtick_rotation)
     ax_main.set_xticklabels(
-        df_color_ordered.columns, 
-        rotation=xtick_rotation, 
-        ha="right" if xtick_rotation not in [0, 90] else "center", 
-        rotation_mode="anchor"
+        df_color_ordered.columns,
+        rotation=xtick_rotation,
+        ha="right" if xtick_rotation not in [0, 90] else "center",
+        rotation_mode="anchor",
     )
     ax_main.set_yticks(np.arange(len(df_color_ordered.index)))
     ax_main.set_yticklabels(df_color_ordered.index)

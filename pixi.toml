@@ -1,5 +1,5 @@
 [workspace]
-authors = ["j-bac <jo.bac@live.fr>"]
+authors = ["j-bac"]
 channels = ["conda-forge","bioconda","ejolly"]
 name = "norkin_organoid"
 platforms = ["linux-64"]

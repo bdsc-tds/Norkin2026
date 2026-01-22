@@ -1,11 +1,10 @@
 # Organoid analysis
+This repository contains the analysis pipeline and figures presented in the paper downstream of the [xenium preprocessing pipeline](https://github.com/bdsc-tds/xenium_analysis_pipeline/tree/main).
 
-This project uses [Pixi](https://prefix.dev/docs/pixi) for environment management and aims to provide a reproducible setup for working with the `spatialdata` ecosystem.
-
-## 🧱 Environment Setup
+## Environment Setup
 ### 1. Install Pixi
 
-Install Pixi using the recommended shell script:
+Install [Pixi](https://prefix.dev/docs/pixi) for environment management:
 
 ```bash
 curl -sSf https://pixi.sh/install.sh | bash
@@ -23,13 +22,23 @@ pixi config set --local run-post-link-scripts insecure
 pixi install
 ```
 
-### 2. Activate environment
 You can add the environment as a Jupyter kernel named `norkin-organoid` with:
 ```bash
-pixi run add-kernel
+pixi run add-kernels
 ```
 
-You can also activate the environment from a terminal:
+You can also activate the environments from a terminal:
 ```bash
 pixi shell -e norkin-organoid
+pixi shell -e cellcharter
 ```
+
+## Repository Structure
+*   **`data/`**: Directories for `xenium` and `scRNAseq` raw/processed datasets and associated metadata.
+*   **`config/`**: Snakemake pipeline paths defined in `config.yml`.
+*   **`workflow/`**: Snakemake logic, including `rules/` and `scripts/`. 
+*   **`workflow/notebooks/`**: Analysis notebooks that were not incorporated as snakemake rules:
+*   **`results/`**: Analysis outputs.
+*   **`figures/`**: Figure outputs and associated .csv data.
+*   **`figures_manuscript/`**: Figures symlinks into paper figures organized by figure number.
+*   **`figures_manuscript_data/`**: Figures data symlinks into paper figures organized by figure number.
