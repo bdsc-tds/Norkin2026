@@ -32,6 +32,30 @@ stopifnot(
     length(unique(df_morphology_umap$organoid_id))
 )
 
+#Figure 3C
+
+shape_colors <- c(
+  "Branched"   = "#542788",
+  "Elongated"  = "#6BAED6",
+  "Globular"   = "#D73027",
+  "Spherical"  = "#2B7522",
+  "Compact"    = "#F46D43",
+  "Irregular"  = "#FEE08B"
+)
+
+ggplot(
+  umap_df,
+  aes(x = UMAP1, y = UMAP2, color = Shape_name)
+) +
+  geom_point(size = 1, alpha = 0.8) +
+  scale_color_manual(values = shape_colors) +
+  theme_classic(base_size = 12) +
+  labs(
+    x = "UMAP 1",
+    y = "UMAP 2",
+    color = "Morphology shape"
+  )
+
 ## ============================================================
 ## Helper: 90th percentile cap
 ## ============================================================
