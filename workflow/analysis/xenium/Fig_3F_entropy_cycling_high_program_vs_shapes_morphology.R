@@ -11,7 +11,7 @@ library(tidyr)
 ## Load data (organoid-level morphology UMAP table)
 ## ============================================================
 
-df_morphology_umap <- read.csv("umap_df_090126.csv")
+df_morphology_umap <- read.csv("umap_df.csv")
 
 ## ============================================================
 ## Assumptions
