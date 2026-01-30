@@ -4,12 +4,11 @@ data/*
 results/*
 figures/*
 workflow/scratch/
+xenium_analysis_pipeline/
 !data/.gitkeep
 !results/.gitkeep
 !figures/.gitkeep
-
-#Ignore xenium_analysis_pipeline
-xenium_analysis_pipeline/
+!xenium_analysis_pipeline/config/
 
 # Ignore snakemake
 *.snakemake

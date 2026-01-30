@@ -14,6 +14,7 @@ import warnings
 import anndata as ad
 import scanpy as sc
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -864,3 +865,17 @@ def split_samples_by_coords(
             ads[correction_method][key_sample]["cells_boundaries"] = ads[correction_method][key_sample][
                 "cells_boundaries"
             ][list(ix_keep_samples)].copy()
+
+
+def set_mpl_rcparams(
+    params={
+        "pdf.fonttype": 42,  # embed TrueType fonts
+        "ps.fonttype": 42,
+        "svg.fonttype": "none",
+        "text.usetex": False,
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans"],
+        "savefig.transparent": True,
+    },
+):
+    mpl.rcParams.update(params)
