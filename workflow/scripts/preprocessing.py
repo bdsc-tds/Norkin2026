@@ -1075,6 +1075,8 @@ def pseudobulk(ad, key, mode="sum", agg_columns=None, layer=None, obsm=None):
     if agg_columns is None:
         agg_columns = ad.obs.columns
 
+    if layer is not None and obsm is not None:
+        raise ValueError("Cannot specify both layer and obsm")
     if layer:
         X = ad.layers[layer]
     elif obsm:
