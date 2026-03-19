@@ -42,3 +42,10 @@ pixi shell -e cellcharter
 *   **`figures/`**: Figure outputs and associated .csv data.
 *   **`figures_manuscript/`**: Figures symlinks into paper figures organized by figure number.
 *   **`figures_manuscript_data/`**: Figures data symlinks into paper figures organized by figure number.
+
+## Rerunning analyses
+Initial analysis steps are orchestrated by a snakemake workflow. This can be launched in an HPC environment using 
+```bash
+./run.slurm
+```
+Analyses downstream of this are then in `workflow/notebooks/`
