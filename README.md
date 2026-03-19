@@ -44,8 +44,9 @@ pixi shell -e cellcharter
 *   **`figures_manuscript_data/`**: Figures data symlinks into paper figures organized by figure number.
 
 ## Rerunning analyses
-Initial analysis steps are orchestrated by a snakemake workflow. This can be launched in an HPC environment using 
+The `xenium_analysis_pipeline` snakemake pipeline mentioned at the top of this README has to be run to obtain segmentation and cell type annotation results.
+All downstream analyses from the paper are in `workflow/notebooks/`.
+The snakemake workflow within this repository only contains some accessory rules to generate Seurat objects of the xenium data and embedding plots. This can be launched in an HPC environment using 
 ```bash
 ./run.slurm
 ```
-Analyses downstream of this are then in `workflow/notebooks/`
