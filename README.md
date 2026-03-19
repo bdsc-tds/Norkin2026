@@ -45,7 +45,9 @@ pixi shell -e cellcharter
 
 ## Rerunning analyses
 The `xenium_analysis_pipeline` snakemake pipeline mentioned at the top of this README has to be run to obtain segmentation and cell type annotation results.
+
 All downstream analyses from the paper are in `workflow/notebooks/`.
+
 The snakemake workflow within this repository only contains some accessory rules to generate Seurat objects of the xenium data and embedding plots. This can be launched in an HPC environment using 
 ```bash
 ./run.slurm
