@@ -1,5 +1,5 @@
 # Organoid analysis
-This repository contains the analysis pipeline and figures presented in the paper downstream of the [xenium preprocessing pipeline](https://github.com/bdsc-tds/xenium_analysis_pipeline/tree/main).
+This repository contains the analysis presented in [Norkin et al., 2026](https://www.biorxiv.org/content/10.64898/2026.02.10.704651v2.full.pdf) downstream of the [xenium preprocessing pipeline](https://github.com/bdsc-tds/xenium_analysis_pipeline/tree/main).
 
 ## Environment Setup
 ### 1. Install Pixi
